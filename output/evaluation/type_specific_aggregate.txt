@@ -1,0 +1,24 @@
+TYPE-SPECIFIC PERFORMANCE (Averaged Across All 7 Systems)
+======================================================================
+
+FACTOID:
+  LLM Judge:   0.5114
+  F1 Score:    0.3563
+  Exact Match: 0.1679
+  Fuzzy Match: 0.4317
+  Systems:     7/7
+
+LIST:
+  LLM Judge:   0.2021
+  F1 Score:    0.1574
+  Exact Match: 0.0214
+  Fuzzy Match: 0.2023
+  Systems:     7/7
+
+MULTIPLE_CHOICE:
+  LLM Judge:   0.1976
+  F1 Score:    0.1871
+  Exact Match: 0.1786
+  Fuzzy Match: 0.3117
+  Systems:     7/7
+

@@ -1,0 +1,87 @@
+Key stats
+2
+1
+2
+Won
+Drawn
+Lost
+12
+Goals
+2.4 avg. per match
+10
+Goals conceded
+2 avg. per match
+58.6%
+Possession (%)
+89%
+Passing accuracy (%)
+145
+Balls recovered
+29 avg. per match
+29
+Tackles won
+5.8 avg. per match
+0
+Clean sheets
+16
+Saves
+3.2 avg. per match
+227.85
+Distance covered (km)
+45.4 avg. per match
+14
+Yellow cards
+2.8 avg. per match
+1
+Red cards
+0.2 avg. per match
+
+Attacking
+9
+2
+Goals inside area
+Goals outside area
+5
+Right foot
+5
+Left foot
+1
+Head
+0
+Other
+1
+Own goals for
+23
+32
+20
+Attempts on target
+Attempts off target
+Attempts blocked
+9
+Assists
+222
+Attacks
+3
+Clear chances
+1
+Penalties scored
+0
+Penalties missed
+1
+Penalties awarded
+1
+1
+Crossbar
+Post
+18
+Corners taken
+4
+Offsides
+118
+Dribbles
+61
+Runs into attacking third
+65
+Runs into key play area
+47
+Runs into penalty area

@@ -1,3 +1,6 @@
+# Conversation Manager -- Oswaldo
+
+
 class ConversationManager:
     def __init__(self, window_size: int = 5, 
                  memory_strategy: str = "sliding_window"):

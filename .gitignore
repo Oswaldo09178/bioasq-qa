@@ -1,2 +1,7 @@
 .env
+service_key.json
+qaenv/*
+data/corpus
 data/BioASQ-training14b/training14b.json
+**/*.jsonl
+**/__pycache__

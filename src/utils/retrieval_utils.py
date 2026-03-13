@@ -8,6 +8,7 @@ import time
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from sklearn.metrics.pairwise import cosine_similarity
+import pickle
 
 # Allow imports from sibling files (data_utils.py by Lowami)
 sys.path.append(os.path.dirname(__file__))
@@ -18,7 +19,8 @@ from data_utils import get_snippets
 # BM25 (Sparse Retrieval)
 # ===========================================================================
 
-def build_bm25_index(corpus: list[dict]) -> BM25Okapi:
+def build_bm25_index(corpus: list[dict],
+                     config: dict = None) -> BM25Okapi:
     """
     Build a BM25 index over the corpus.
     corpus: [{"doc_id": ..., "text": ..., "pmid": ...}]
@@ -32,12 +34,16 @@ def build_bm25_index(corpus: list[dict]) -> BM25Okapi:
 def bm25_retrieve(query: str,
                   index: BM25Okapi,
                   corpus: list[dict],
-                  top_k: int = 10) -> list[dict]:
+                  top_k: int = 10,
+                  config: dict = None) -> list[dict]:
     """
     Retrieve top-K documents using BM25 sparse matching.
     Returns: [{"doc_id", "text", "pmid", "score"}]
     """
     # Tokenize the query the same way as the corpus
+
+    top_k = top_k or (config or {}).get("retrieval", {}).get("top_k", 10)
+
     tokenized_query = query.lower().split()
 
     # Get BM25 scores for all documents
@@ -63,11 +69,9 @@ def bm25_retrieve(query: str,
 # PubMed Fetching & Corpus Building
 # ===========================================================================
 
+import xml.etree.ElementTree as ET
+
 def fetch_pubmed_abstract(pmid: str) -> dict:
-    """
-    Fetch abstract from PubMed via E-utilities API given a PMID.
-    Returns: {"pmid", "title", "abstract"}
-    """
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
     params = {
         "db": "pubmed",
@@ -79,79 +83,75 @@ def fetch_pubmed_abstract(pmid: str) -> dict:
     try:
         response = requests.get(base_url, params=params, timeout=10)
         response.raise_for_status()
-        xml_text = response.text
+
+        root = ET.fromstring(response.text)
 
         # Extract title
-        title = ""
-        if "<ArticleTitle>" in xml_text and "</ArticleTitle>" in xml_text:
-            start = xml_text.index("<ArticleTitle>") + len("<ArticleTitle>")
-            end = xml_text.index("</ArticleTitle>")
-            title = xml_text[start:end].strip()
+        title_el = root.find(".//ArticleTitle")
+        title = "".join(title_el.itertext()).strip() if title_el is not None else ""
 
-        # Extract abstract text
-        abstract = ""
-        if "<AbstractText>" in xml_text and "</AbstractText>" in xml_text:
-            start = xml_text.index("<AbstractText>") + len("<AbstractText>")
-            end = xml_text.index("</AbstractText>")
-            abstract = xml_text[start:end].strip()
+        # Concatenate all AbstractText sections (handles structured abstracts
+        # with BACKGROUND / METHODS / RESULTS / CONCLUSIONS labels)
+        abstract_parts = []
+        for el in root.findall(".//AbstractText"):
+            label = el.get("Label")
+            text = "".join(el.itertext()).strip()
+            if text:
+                abstract_parts.append(f"{label}: {text}" if label else text)
+        abstract = " ".join(abstract_parts)
 
-        # Be polite to NCBI — max 3 requests per second without API key
         time.sleep(0.34)
-
         return {"pmid": pmid, "title": title, "abstract": abstract}
 
+    except ET.ParseError as e:
+        print(f"[WARNING] XML parse error for PMID {pmid}: {e}")
+        return {"pmid": pmid, "title": "", "abstract": ""}
     except Exception as e:
         print(f"[WARNING] Could not fetch PMID {pmid}: {e}")
         return {"pmid": pmid, "title": "", "abstract": ""}
 
 
 def build_corpus_from_bioasq(questions: list[dict]) -> list[dict]:
-    """
-    Extract all unique documents from BioASQ questions
-    and fetch their abstracts to build the retrieval corpus.
-    Uses Lowami's get_snippets() to extract snippet texts per question.
-    """
     corpus = []
-    seen_pmids = set()
+    seen_chunk_ids = set()
 
     for question in questions:
-        # Use Lowami's get_snippets to extract snippet data
         snippets = get_snippets(question)
 
         for snippet in snippets:
-            # Extract PMID from the document URL
-            # BioASQ document URLs look like: http://www.ncbi.nlm.nih.gov/pubmed/12345678
             doc_url = snippet.get("document", "")
             pmid = doc_url.rstrip("/").split("/")[-1]
 
-            if not pmid or pmid in seen_pmids:
+            if not pmid:
                 continue
 
-            seen_pmids.add(pmid)
-
-            # Try to use the snippet text directly first (avoids API calls)
             snippet_text = snippet.get("text", "").strip()
+            # Use offset to create a unique chunk ID per snippet
+            begin = snippet.get("begin", 0)
+            end = snippet.get("end", 0)
+            chunk_id = f"pubmed_{pmid}_{begin}_{end}"
+
+            if chunk_id in seen_chunk_ids:
+                continue
+            seen_chunk_ids.add(chunk_id)
 
             if snippet_text:
-                # We already have the text from BioASQ — use it directly
                 corpus.append({
-                    "doc_id": f"pubmed_{pmid}",
+                    "doc_id": chunk_id,
                     "text": snippet_text,
                     "pmid": pmid
                 })
             else:
-                # Fall back to fetching from PubMed API
                 fetched = fetch_pubmed_abstract(pmid)
                 full_text = fetched["abstract"] or fetched["title"]
-
                 if full_text:
                     corpus.append({
-                        "doc_id": f"pubmed_{pmid}",
+                        "doc_id": chunk_id,
                         "text": full_text,
                         "pmid": pmid
                     })
 
-    print(f"[INFO] Corpus built: {len(corpus)} unique documents from {len(questions)} questions.")
+    print(f"[INFO] Corpus built: {len(corpus)} chunks from {len(questions)} questions.")
     return corpus
 
 
@@ -160,13 +160,20 @@ def build_corpus_from_bioasq(questions: list[dict]) -> list[dict]:
 # ===========================================================================
 
 def build_dense_index(corpus: list[dict],
-                      model_name: str = "BAAI/bge-m3") -> tuple:
+                      model_name: str = None,
+                      config: dict = None) -> tuple:
     """
     Encode corpus with a biomedical embedding model.
     Returns: (embeddings_matrix, encoder_model)
 
     Note: On machines with limited RAM, use "BAAI/bge-small-en-v1.5" instead.
     """
+    if not corpus:
+        raise ValueError("[ERROR] Cannot build dense index from empty corpus")
+    cfg = (config or {}).get("retrieval", {})
+    model_name = model_name or cfg.get("dense_model", "BAAI/bge-m3")
+    batch_size = cfg.get("batch_size", 32)
+
     print(f"[INFO] Loading embedding model: {model_name}")
     encoder = SentenceTransformer(model_name)
 
@@ -175,7 +182,7 @@ def build_dense_index(corpus: list[dict],
     print(f"[INFO] Encoding {len(texts)} documents...")
     embeddings = encoder.encode(
         texts,
-        batch_size=32,
+        batch_size=batch_size,
         show_progress_bar=True,
         convert_to_numpy=True,
         normalize_embeddings=True  # makes cosine similarity = dot product
@@ -221,18 +228,57 @@ def dense_retrieve(query: str,
     return results
 
 
+def save_dense_index(embeddings: np.ndarray, 
+                     filepath: str) -> None:
+    """Save embeddings matrix to disk."""
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    np.save(filepath, embeddings)
+    print(f"[INFO] Dense index saved to {filepath}")
+
+
+def load_dense_index(filepath: str, 
+                     model_name: str) -> tuple:
+    """Load embeddings from disk and reinitialize the encoder."""
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"No dense index found at {filepath}")
+    embeddings = np.load(filepath)
+    encoder = SentenceTransformer(model_name)
+    print(f"[INFO] Dense index loaded from {filepath}. Shape: {embeddings.shape}")
+    return embeddings, encoder
+
+
+def save_bm25_index(index: BM25Okapi, filepath: str) -> None:
+    """Pickle the BM25 index to disk."""
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    with open(filepath, "wb") as f:
+        pickle.dump(index, f)
+    print(f"[INFO] BM25 index saved to {filepath}")
+
+
+def load_bm25_index(filepath: str) -> BM25Okapi:
+    """Load a pickled BM25 index from disk."""
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"No BM25 index found at {filepath}")
+    with open(filepath, "rb") as f:
+        index = pickle.load(f)
+    print(f"[INFO] BM25 index loaded from {filepath}")
+    return index
+
+
 # ===========================================================================
 # Reciprocal Rank Fusion (RRF)
 # ===========================================================================
 
 def reciprocal_rank_fusion(bm25_results: list[dict],
                            dense_results: list[dict],
-                           k: int = 60) -> list[dict]:
+                           k: int = None,
+                           config: dict = None) -> list[dict]:
     """
     Merge sparse and dense results using RRF scoring.
     RRF formula: score(d) = sum( 1 / (k + rank(d)) ) across both lists.
     Returns: reranked list of [{"doc_id", "text", "pmid", "rrf_score"}]
     """
+    k = k or (config or {}).get("retrieval", {}).get("rrf_k", 60)
     rrf_scores = {}
     doc_store = {}  # keep text/pmid for each doc_id
 
@@ -269,8 +315,9 @@ def reciprocal_rank_fusion(bm25_results: list[dict],
 
 def rerank_with_crossencoder(query: str,
                               candidates: list[dict],
-                              model_name: str,
-                              top_k: int = 5) -> list[dict]:
+                              model_name: str = None,
+                              top_k: int = 5,
+                              config: dict = None) -> list[dict]:
     """
     Apply cross-encoder reranking on fused candidates.
     The cross-encoder scores each (query, document) pair jointly —
@@ -280,6 +327,10 @@ def rerank_with_crossencoder(query: str,
     Recommended model_name: "cross-encoder/ms-marco-MiniLM-L-6-v2"
     For biomedical: "cross-encoder/nli-MiniLM2-L6-H768"
     """
+    cfg = (config or {}).get("retrieval", {})
+    model_name = model_name or cfg.get("crossencoder_model", "cross-encoder/qnli-MiniLM2-L6")
+    top_k = top_k or cfg.get("rerank_top_k", 5)
+
     cross_encoder = CrossEncoder(model_name)
 
     # Build (query, document_text) pairs for the cross-encoder

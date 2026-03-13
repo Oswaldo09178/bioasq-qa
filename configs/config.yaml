@@ -1,0 +1,11 @@
+# config/config.yaml
+
+retrieval:
+  top_k: 10
+  rrf_k: 60
+  batch_size: 32
+  bm25_index_path: "output/indices/bm25_index.pkl"
+  dense_index_path: "output/indices/dense_index.npy"
+  dense_model: "BAAI/bge-m3"
+  crossencoder_model: "cross-encoder/qnli-MiniLM2-L6"
+  rerank_top_k: 5

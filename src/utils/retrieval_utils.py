@@ -302,3 +302,39 @@ def rerank_with_crossencoder(query: str,
     scored_candidates.sort(key=lambda x: x["rerank_score"], reverse=True)
 
     return scored_candidates[:top_k]
+
+# ===========================================================================
+# Main Runner
+# ===========================================================================
+
+if __name__ == "__main__":
+    import json
+    sys.path.append(os.path.dirname(__file__))
+    from data_utils import load_bioasq_dataset
+
+    DATA_PATH = "data/BioASQ-training14b/training14b.json"
+    OUTPUT_PATH = "output/retrieval_results.json"
+    os.makedirs("output", exist_ok=True)
+
+    print("[INFO] Loading BioASQ data...")
+    questions = load_bioasq_dataset(DATA_PATH)
+    print(f"[INFO] Loaded {len(questions)} questions.")
+
+    corpus = build_corpus_from_bioasq(questions)
+    bm25_index = build_bm25_index(corpus)
+    embeddings, encoder = build_dense_index(corpus, model_name="BAAI/bge-m3")
+
+    print("[INFO] Running hybrid retrieval...")
+    results = []
+    for i, q in enumerate(questions):
+        query = q.get("body", "")
+        bm25_res = bm25_retrieve(query, bm25_index, corpus, top_k=10)
+        dense_res = dense_retrieve(query, embeddings, encoder, corpus, top_k=10)
+        hybrid_res = reciprocal_rank_fusion(bm25_res, dense_res)
+        results.append({"question_id": q.get("id"), "results": hybrid_res[:10]})
+        if i % 100 == 0:
+            print(f"[INFO] Processed {i}/{len(questions)} questions...")
+
+    with open(OUTPUT_PATH, "w") as f:
+        json.dump(results, f)
+    print(f"[INFO] Done! Results saved to {OUTPUT_PATH}")

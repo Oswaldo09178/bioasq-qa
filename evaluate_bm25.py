@@ -3,6 +3,7 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), "src/utils"))
 from data_utils import load_bioasq_dataset
+from retrieval_utils import build_bm25_index, bm25_retrieve, build_corpus_from_bioasq
 
 def average_precision(retrieved_doc_ids, gold_doc_ids, k=10):
     gold_set = set(gold_doc_ids)
@@ -15,35 +16,27 @@ def average_precision(retrieved_doc_ids, gold_doc_ids, k=10):
             score += hits / i
     return score / min(len(gold_set), k) if gold_set else 0.0
 
-# Load ground truth
-print("[INFO] Loading ground truth...")
 questions = load_bioasq_dataset("data/BioASQ-training14b/training14b.json")
 gold_map = {q["id"]: q.get("documents", []) for q in questions}
 type_map = {q["id"]: q.get("type", "unknown") for q in questions}
 
-# Load retrieval results
-print("[INFO] Loading retrieval results...")
-with open("output/retrieval_results.json") as f:
-    results = json.load(f)
+corpus = build_corpus_from_bioasq(questions)
+bm25_index = build_bm25_index(corpus)
 
-# Compute MAP@10 overall and per question type
 ap_scores = []
 type_scores = {"yesno": [], "factoid": [], "list": [], "summary": []}
 
-for item in results:
-    qid = item["question_id"]
-    retrieved = [r["doc_id"] for r in item["results"]]
-    gold_docs = gold_map.get(qid, [])
-    qtype = type_map.get(qid, "unknown")
+for q in questions:
+    query = q.get("body", "")
+    retrieved = [r["doc_id"] for r in bm25_retrieve(query, bm25_index, corpus, top_k=10)]
+    gold_docs = gold_map.get(q["id"], [])
+    qtype = type_map.get(q["id"], "unknown")
     ap = average_precision(retrieved, gold_docs, k=10)
     ap_scores.append(ap)
     if qtype in type_scores:
         type_scores[qtype].append(ap)
 
-map10 = sum(ap_scores) / len(ap_scores)
-print(f"\n[RESULT] Overall MAP@10 on full 5,729 questions: {map10:.4f}")
-print(f"[RESULT] Total questions evaluated: {len(ap_scores)}")
-print(f"\n[RESULT] MAP@10 by question type:")
+print(f"Overall MAP@10: {sum(ap_scores)/len(ap_scores):.4f}")
 for qtype, scores in type_scores.items():
     if scores:
-        print(f"  {qtype:10s}: {sum(scores)/len(scores):.4f}  ({len(scores)} questions)")
+        print(f"  {qtype:10s}: {sum(scores)/len(scores):.4f}")

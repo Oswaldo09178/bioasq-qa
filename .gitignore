@@ -4,4 +4,5 @@ qaenv/*
 data/corpus
 data/BioASQ-training14b/training14b.json
 **/*.jsonl
-**/__pycache__
+**/__pycache__venv/
+venv/

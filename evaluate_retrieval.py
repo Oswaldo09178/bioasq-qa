@@ -23,7 +23,7 @@ type_map = {q["id"]: q.get("type", "unknown") for q in questions}
 
 # Load retrieval results
 print("[INFO] Loading retrieval results...")
-with open("output/retrieval_results.json") as f:
+with open("output/retrieval_results_reranked.json") as f:
     results = json.load(f)
 
 # Compute MAP@10 overall and per question type

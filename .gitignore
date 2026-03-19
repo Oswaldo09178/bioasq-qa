@@ -6,3 +6,5 @@ data/BioASQ-training14b/training14b.json
 **/*.jsonl
 **/__pycache__venv/
 venv/
+data/BioASQ-training14b/training14b.json
+data/BioASQ-training14b

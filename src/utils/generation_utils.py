@@ -90,21 +90,20 @@ def load_llm(model_name: str, backend: str = "huggingface") -> dict:
 
     elif backend == "google":
         try:
-            import google.generativeai as genai
+            from google import genai
         except ImportError:
-            raise ImportError("Run: pip install google-generativeai")
+            raise ImportError("Run: pip install google-genai")
 
         api_key = os.environ.get("GOOGLE_API_KEY")
         if not api_key:
             raise EnvironmentError("Set GOOGLE_API_KEY environment variable.")
 
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(model_name)
+        client = genai.Client(api_key=api_key)
         print(f"[INFO] Google GenAI client ready: {model_name}")
         return {
             "backend": "google",
             "model_name": model_name,
-            "model": model,
+            "model": client,
             "tokenizer": None,
         }
 
@@ -118,7 +117,7 @@ def load_llm(model_name: str, backend: str = "huggingface") -> dict:
 
 def generate_answer(prompt: str,
                     llm: dict,
-                    max_tokens: int = 512,
+                    max_tokens: int = 1024,
                     temperature: float = 0.1,
                     retries: int = 3) -> str:
     """
@@ -200,15 +199,39 @@ def _generate_openai(prompt: str, llm: dict,
 
 def _generate_google(prompt: str, llm: dict,
                      max_tokens: int, temperature: float) -> str:
-    import google.generativeai as genai
-    model = llm["model"]
+    from google.genai import types
+    client     = llm["model"]
+    model_name = llm["model_name"]
 
-    config = genai.types.GenerationConfig(
-        max_output_tokens=max_tokens,
-        temperature=temperature,
+    response = client.models.generate_content(
+        model=model_name,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            max_output_tokens=max_tokens,
+            temperature=temperature,
+        ),
     )
-    response = model.generate_content(prompt, generation_config=config)
-    return response.text.strip()
+
+    # Robustly extract text — response.text or candidates can be None
+    # when safety filters block output or response structure differs by model.
+    if response.text is not None:
+        return response.text.strip()
+
+    candidates = response.candidates or []
+    for candidate in candidates:
+        try:
+            for part in (candidate.content.parts or []):
+                if hasattr(part, "text") and part.text:
+                    return part.text.strip()
+        except AttributeError:
+            continue
+
+    # Log what we got for debugging
+    print(f"[DEBUG] Full response: {response}")
+    raise ValueError(
+        "Gemini returned no text content. "
+        "Check response above for finish_reason or safety block details."
+    )
 
 
 # ===========================================================================

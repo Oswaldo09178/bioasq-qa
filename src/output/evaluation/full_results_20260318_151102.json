@@ -1,0 +1,42 @@
+{
+  "timestamp": "20260318_151102",
+  "n_predictions": 340,
+  "phase_a": {
+    "phase": "A",
+    "map": 0.0,
+    "snippet_fmeasure": 0.8084,
+    "n_questions": 340
+  },
+  "phase_b": {
+    "phase": "B",
+    "yesno": {
+      "macro_f1": 0.0366,
+      "accuracy": 0.0312,
+      "n": 96
+    },
+    "factoid": {
+      "mrr": 0.0,
+      "n": 97
+    },
+    "list": {
+      "mean_f1": 0.0,
+      "n": 78
+    },
+    "summary": {
+      "rouge_l": 0.2012,
+      "mean_judge_score": null,
+      "n": 69
+    }
+  },
+  "conversational": {
+    "context_retention_accuracy": 0.0,
+    "n_context_turns": 0
+  },
+  "latency": {
+    "mean_latency_s": 1.0115,
+    "min_latency_s": 0.0,
+    "max_latency_s": 3.5765,
+    "throughput_qps": 0.9887,
+    "n_timed": 340
+  }
+}

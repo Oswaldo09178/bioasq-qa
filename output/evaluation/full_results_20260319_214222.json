@@ -1,17 +1,17 @@
 {
-  "timestamp": "20260318_153505",
+  "timestamp": "20260319_214222",
   "n_predictions": 10,
   "phase_a": {
     "phase": "A",
-    "map": 0.0,
+    "map": 0.4766,
     "snippet_fmeasure": 0.8531,
     "n_questions": 10
   },
   "phase_b": {
     "phase": "B",
     "yesno": {
-      "macro_f1": 0.0,
-      "accuracy": 0.0,
+      "macro_f1": 1.0,
+      "accuracy": 1.0,
       "n": 5
     },
     "factoid": {
@@ -19,11 +19,11 @@
       "n": 0
     },
     "list": {
-      "mean_f1": 0.0,
+      "mean_f1": 0.4691,
       "n": 4
     },
     "summary": {
-      "rouge_l": 0.2198,
+      "rouge_l": 0.1798,
       "mean_judge_score": null,
       "n": 1
     },
@@ -31,14 +31,14 @@
       {
         "question_id": "55031181e9bde69634000014",
         "question_type": "summary",
-        "rouge_l": 0.2198,
+        "rouge_l": 0.1798,
         "map": "",
         "snippet_fmeasure": "",
         "macro_f1": "",
         "accuracy": "",
         "mrr": "",
         "list_f1": "",
-        "latency_s": 2.0131
+        "latency_s": 2.1678
       },
       {
         "question_id": "55046d5ff8aee20f27000007",
@@ -50,103 +50,103 @@
         "accuracy": "",
         "mrr": "",
         "rouge_l": "",
-        "latency_s": 0.8029
+        "latency_s": 0.7403
       },
       {
         "question_id": "54e25eaaae9738404b000017",
         "question_type": "yesno",
-        "macro_f1": 0,
-        "accuracy": 0,
+        "macro_f1": 1,
+        "accuracy": 1,
         "map": "",
         "snippet_fmeasure": "",
         "mrr": "",
         "list_f1": "",
         "rouge_l": "",
-        "latency_s": 1.0148
+        "latency_s": 0.9924
       },
       {
         "question_id": "535d292a9a4572de6f000003",
         "question_type": "yesno",
-        "macro_f1": 0,
-        "accuracy": 0,
+        "macro_f1": 1,
+        "accuracy": 1,
         "map": "",
         "snippet_fmeasure": "",
         "mrr": "",
         "list_f1": "",
         "rouge_l": "",
-        "latency_s": 0.915
+        "latency_s": 0.8018
       },
       {
         "question_id": "55262a9787ecba3764000009",
         "question_type": "yesno",
-        "macro_f1": 0,
-        "accuracy": 0,
+        "macro_f1": 1,
+        "accuracy": 1,
         "map": "",
         "snippet_fmeasure": "",
         "mrr": "",
         "list_f1": "",
         "rouge_l": "",
-        "latency_s": 0.9697
+        "latency_s": 0.9054
       },
       {
         "question_id": "51406e6223fec90375000009",
         "question_type": "yesno",
-        "macro_f1": 0,
-        "accuracy": 0,
+        "macro_f1": 1,
+        "accuracy": 1,
         "map": "",
         "snippet_fmeasure": "",
         "mrr": "",
         "list_f1": "",
         "rouge_l": "",
-        "latency_s": 1.042
+        "latency_s": 1.0434
       },
       {
         "question_id": "553fa78b1d53b76422000007",
         "question_type": "list",
-        "list_f1": 0.0,
+        "list_f1": 0.7097,
         "map": "",
         "snippet_fmeasure": "",
         "macro_f1": "",
         "accuracy": "",
         "mrr": "",
         "rouge_l": "",
-        "latency_s": 1.2141
+        "latency_s": 1.1062
       },
       {
         "question_id": "5149199dd24251bc05000040",
         "question_type": "list",
-        "list_f1": 0.0,
+        "list_f1": 0.6667,
         "map": "",
         "snippet_fmeasure": "",
         "macro_f1": "",
         "accuracy": "",
         "mrr": "",
         "rouge_l": "",
-        "latency_s": 0.9748
+        "latency_s": 0.8947
       },
       {
         "question_id": "52bf1db603868f1b06000011",
         "question_type": "yesno",
-        "macro_f1": 0,
-        "accuracy": 0,
+        "macro_f1": 1,
+        "accuracy": 1,
         "map": "",
         "snippet_fmeasure": "",
         "mrr": "",
         "list_f1": "",
         "rouge_l": "",
-        "latency_s": 1.085
+        "latency_s": 0.9166
       },
       {
         "question_id": "5709e4b2cf1c32585100001c",
         "question_type": "list",
-        "list_f1": 0.0,
+        "list_f1": 0.5,
         "map": "",
         "snippet_fmeasure": "",
         "macro_f1": "",
         "accuracy": "",
         "mrr": "",
         "rouge_l": "",
-        "latency_s": 0.6635
+        "latency_s": 0.6826
       }
     ]
   },
@@ -155,10 +155,10 @@
     "n_context_turns": 0
   },
   "latency": {
-    "mean_latency_s": 1.0695,
-    "min_latency_s": 0.6635,
-    "max_latency_s": 2.0131,
-    "throughput_qps": 0.935,
+    "mean_latency_s": 1.0251,
+    "min_latency_s": 0.6826,
+    "max_latency_s": 2.1678,
+    "throughput_qps": 0.9755,
     "n_timed": 10
   }
 }

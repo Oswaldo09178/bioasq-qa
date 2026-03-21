@@ -3,26 +3,23 @@ EVALUATION REPORT — retriever=bm25  generator=gemini
 
 PHASE A — RETRIEVAL
 ======================================================================
-  MAP:                   0.3805
-  Snippet F-measure:     0.8084
-  N questions:           340
+  MAP:                   0.4766
+  Snippet F-measure:     0.8531
+  N questions:           10
 
 PHASE B — GENERATION (by question type)
 ======================================================================
   YES/NO:
-    Macro F1:            0.6785
-    Accuracy:            0.8542
-    N:                   96
-  FACTOID:
-    MRR:                 0.232
-    N:                   97
+    Macro F1:            1.0
+    Accuracy:            1.0
+    N:                   5
   LIST:
-    Mean F1:             0.2357
-    N:                   78
+    Mean F1:             0.4691
+    N:                   4
   SUMMARY:
-    ROUGE-L:             0.1944
+    ROUGE-L:             0.1798
     LLM Judge Score:     None
-    N:                   69
+    N:                   1
 
 CONVERSATIONAL
 ======================================================================
@@ -31,8 +28,8 @@ CONVERSATIONAL
 
 LATENCY
 ======================================================================
-  Mean latency (s):      1.2023
-  Min latency (s):       0.0
-  Max latency (s):       14.3368
-  Throughput (q/s):      0.8317
-  N timed:               340
+  Mean latency (s):      1.0251
+  Min latency (s):       0.6826
+  Max latency (s):       2.1678
+  Throughput (q/s):      0.9755
+  N timed:               10

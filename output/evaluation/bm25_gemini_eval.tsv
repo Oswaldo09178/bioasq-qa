@@ -1,0 +1,11 @@
+question_id	question_type	map	snippet_fmeasure	macro_f1	accuracy	mrr	list_f1	rouge_l	latency_s
+55031181e9bde69634000014	summary							0.1798	2.1678
+55046d5ff8aee20f27000007	list						0.0		0.7403
+54e25eaaae9738404b000017	yesno			1	1				0.9924
+535d292a9a4572de6f000003	yesno			1	1				0.8018
+55262a9787ecba3764000009	yesno			1	1				0.9054
+51406e6223fec90375000009	yesno			1	1				1.0434
+553fa78b1d53b76422000007	list						0.7097		1.1062
+5149199dd24251bc05000040	list						0.6667		0.8947
+52bf1db603868f1b06000011	yesno			1	1				0.9166
+5709e4b2cf1c32585100001c	list						0.5		0.6826

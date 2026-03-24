@@ -209,7 +209,7 @@ def parse_llama_batch_output(llama_results: list[dict],
         # Extract content from Vertex AI MaaS response structure
         try:
             content = (
-                result["response"]["body"]["choices"][0]["message"]["content"]
+                result["response"]["choices"][0]["message"]["content"]
             )
         except (KeyError, IndexError, TypeError):
             print(f"[WARNING] Could not extract content for id '{qid}' — skipping.")
@@ -649,7 +649,7 @@ def create_judge_input(llama_results: list[dict],
                     item["response"]["body"]["choices"][0]["message"]["content"]
                 )
             except (KeyError, IndexError, TypeError):
-                print(f"[WARNING] Skipping malformed result: {item.get('custom_id')}")
+                print(f"[WARNING] Skipping malformed result: {item}")
                 continue
 
             judge_prompt = (

@@ -41,9 +41,11 @@ def load_bioasq_dataset(filepath: str) -> list[dict]:
         path = resolved_path
 
     with open(path, "r") as f:
-        data = json.load(f)
-
-    questions = data["questions"]
+        if filepath.endswith(".jsonl"):
+            questions = [json.loads(line)["request"]["contents"][0]["parts"][0]["text"] for line in f.readlines()]
+        else:
+            data = json.load(f)
+            questions = data["questions"]
     print(f"[INFO] Loaded {len(questions)} questions from {path.name}")
     return questions
 

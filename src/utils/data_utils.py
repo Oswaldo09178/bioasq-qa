@@ -156,3 +156,18 @@ def split_dataset(questions: list[dict],
 
     print(f"[INFO] Dataset split — train: {len(train)}, val: {len(val)}")
     return train, val
+
+def get_questions_by_type(questions, q_type, n):
+    """
+    Helper function to get the first n questions of a specific type.
+    This function can be used in analysis of generation strength by question type.
+    """
+    results = []
+    l = 0
+    for q in questions:
+        if q['type'] == q_type:
+            results.append(q)
+            l += 1
+        if l == n:
+            break
+    return results

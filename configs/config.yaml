@@ -7,5 +7,5 @@ retrieval:
   bm25_index_path: "output/indices/bm25_index.pkl"
   dense_index_path: "output/indices/dense_index.npy"
   dense_model: "BAAI/bge-m3"
-  crossencoder_model: "cross-encoder/qnli-MiniLM2-L6"
+  crossencoder_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
   rerank_top_k: 5

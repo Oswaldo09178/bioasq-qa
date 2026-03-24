@@ -1,3 +1,4 @@
+from typing import Optional, Union, List, Dict, Tuple, Any
 # Generation Utilities (Oswaldo)
 # Handles LLM loading, answer generation, question-type routing,
 # and strict grounding verification.
@@ -259,7 +260,7 @@ def route_by_question_type(question: dict,
             "question_id":  str,
             "question_type": str,
             "raw_response": str,   # full model output
-            "answer":       str | list,  # parsed answer
+            "answer":       Union[str, list],  # parsed answer
         }
     """
     qtype  = question.get("type", "summary").lower()
@@ -293,7 +294,7 @@ def route_by_question_type(question: dict,
 # Answer Parsing
 # ===========================================================================
 
-def parse_answer(raw_response: str, qtype: str) -> str | list:
+def parse_answer(raw_response: str, qtype: str) -> Union[str, list]:
     """
     Parse the raw model output into the format expected by evaluation_utils.
 

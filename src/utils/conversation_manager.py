@@ -1,3 +1,4 @@
+from typing import Optional, Union, List, Dict, Tuple, Any
 # Conversation Manager (Oswaldo)
 # Handles multi-turn dialogue state, anaphora resolution,
 # and contextualized query building for the BioASQ RAG system.
@@ -40,11 +41,28 @@ ANAPHORIC_PATTERNS = [
 
 # Simple medical entity extraction patterns
 # In production, replace with a NER model (e.g., scispaCy en_ner_bc5cdr_md)
-ENTITY_PATTERNS = [
-    r"\b[A-Z]{2,}(?:\d+)?\b",                    # gene symbols: RET, GDNF, SOX10
-    r"\b\w+(?:mab|nib|vir|mycin|cillin|pril)\b",  # drug suffixes
-    r"\b(?:syndrome|disease|disorder|carcinoma|tumor|cancer|mutation|receptor|pathway)\b",
-]
+
+# Gene symbols: strictly uppercase, 2-10 chars, optional trailing digits (RET, GDNF, SOX10)
+# NOTE: do NOT use re.IGNORECASE on this pattern or it will match every word
+GENE_SYMBOL_PATTERN = r"\b[A-Z]{2,10}(?:\d+)?\b"
+
+# Drug name suffixes (case-insensitive is fine here)
+DRUG_SUFFIX_PATTERN = r"\b\w+(?:mab|nib|vir|mycin|cillin|pril|olol|sartan)\b"
+
+# Medical nouns (case-insensitive)
+MEDICAL_NOUN_PATTERN = r"\b(?:syndrome|disease|disorder|carcinoma|tumor|cancer|mutation|receptor|pathway|phenotype|penetrance|inheritance|variant|allele|locus|loci)\b"
+
+# Common English stopwords to exclude from the entity registry
+_STOPWORDS = {
+    "is", "it", "in", "the", "a", "an", "of", "to", "and", "or", "for",
+    "are", "was", "be", "has", "have", "that", "this", "with", "as", "at",
+    "by", "from", "on", "its", "not", "but", "what", "which", "who", "how",
+    "both", "while", "also", "more", "than", "rather", "does", "do", "due",
+    "include", "involves", "several", "key", "common", "rare", "these",
+    "those", "their", "they", "them", "such", "each", "any", "all",
+    "primarily", "associated", "contribute", "classified", "considered",
+    "follow", "found", "known", "show", "suggest", "form", "forms",
+}
 
 
 # ===========================================================================
@@ -403,14 +421,27 @@ class ConversationManager:
         """
         Extract medical entities from text using regex patterns.
         In production, swap this for a scispaCy NER pipeline.
-        Returns a deduplicated list of entity strings.
+        Returns a deduplicated list of entity strings, stopwords excluded.
         """
         entities = []
-        for pattern in ENTITY_PATTERNS:
-            matches = re.findall(pattern, text, flags=re.IGNORECASE)
-            entities.extend(matches)
-        # Deduplicate while preserving order
-        return list(dict.fromkeys(entities))
+
+        # Gene symbols: strict uppercase match — NO IGNORECASE
+        entities.extend(re.findall(GENE_SYMBOL_PATTERN, text))
+
+        # Drug suffixes and medical nouns: case-insensitive is fine
+        entities.extend(re.findall(DRUG_SUFFIX_PATTERN, text, flags=re.IGNORECASE))
+        entities.extend(re.findall(MEDICAL_NOUN_PATTERN, text, flags=re.IGNORECASE))
+
+        # Deduplicate, filter stopwords and single characters
+        seen = set()
+        filtered = []
+        for e in entities:
+            key = e.lower()
+            if key not in seen and key not in _STOPWORDS and len(e) > 1:
+                seen.add(key)
+                filtered.append(e)
+
+        return filtered
 
     def _update_entity_registry(self, entities: list[str]) -> None:
         """
@@ -423,7 +454,7 @@ class ConversationManager:
                 "last_turn": self._turn_counter
             }
 
-    def _resolve_from_registry(self, category: str = None) -> str | None:
+    def _resolve_from_registry(self, category: str = None) -> Optional[str]:
         """
         Find the most recently mentioned entity in the registry.
         If category is provided (e.g. 'gene', 'drug'), filters loosely

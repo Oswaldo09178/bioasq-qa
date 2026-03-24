@@ -1,3 +1,4 @@
+from typing import Optional, Union, List, Dict, Tuple, Any
 # Evaluation Utilities — Lowami
 #
 # Strictly implements the metrics defined in the proposal:
@@ -401,7 +402,7 @@ class LatencyTracker:
 
     def __init__(self):
         self._latencies: list[float] = []
-        self._start: float | None    = None
+        self._start: Optional[float]    = None
 
     class _Timer:
         def __init__(self, tracker):

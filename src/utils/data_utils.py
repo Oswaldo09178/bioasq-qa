@@ -1,3 +1,4 @@
+from typing import Optional, Union, List, Dict, Tuple, Any
 # Data Utilities — Lowami
 
 import difflib
@@ -41,11 +42,9 @@ def load_bioasq_dataset(filepath: str) -> list[dict]:
         path = resolved_path
 
     with open(path, "r") as f:
-        if filepath.endswith(".jsonl"):
-            questions = [json.loads(line)["request"]["contents"][0]["parts"][0]["text"] for line in f.readlines()]
-        else:
-            data = json.load(f)
-            questions = data["questions"]
+        data = json.load(f)
+
+    questions = data["questions"]
     print(f"[INFO] Loaded {len(questions)} questions from {path.name}")
     return questions
 
@@ -156,18 +155,3 @@ def split_dataset(questions: list[dict],
 
     print(f"[INFO] Dataset split — train: {len(train)}, val: {len(val)}")
     return train, val
-
-def get_questions_by_type(questions, q_type, n):
-    """
-    Helper function to get the first n questions of a specific type.
-    This function can be used in analysis of generation strength by question type.
-    """
-    results = []
-    l = 0
-    for q in questions:
-        if q['type'] == q_type:
-            results.append(q)
-            l += 1
-        if l == n:
-            break
-    return results

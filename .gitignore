@@ -9,3 +9,6 @@ data/BioASQ-training14b/training14b.json
 venv/
 data/BioASQ-training14b/training14b.json
 data/BioASQ-training14b
+__pycache__/
+*.pyc
+output/indices/

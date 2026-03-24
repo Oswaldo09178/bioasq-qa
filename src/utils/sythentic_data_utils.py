@@ -1,3 +1,4 @@
+from typing import Optional, Union, List, Dict, Tuple, Any
 # Synthetic Data Utilities — Lowami
 #
 # Pipeline overview:
@@ -28,9 +29,8 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 from google.cloud import storage
 from google.oauth2 import service_account
-from google.cloud import aiplatform
 
-from data_utils import load_bioasq_dataset, parse_question, get_questions_by_type
+from data_utils import load_bioasq_dataset, parse_question
 
 load_dotenv()
 
@@ -54,7 +54,6 @@ if not SERVICE_KEY_PATH.exists():
 credentials = service_account.Credentials.from_service_account_file(
     str(SERVICE_KEY_PATH)
 )
-aiplatform.init(project="agentic-486120", location="us-east5")
 
 
 # ===========================================================================
@@ -117,37 +116,6 @@ Generate exactly 2 follow-up pairs (Subquestion 1/Subanswer 1, Subquestion 2/Sub
             f.write(json.dumps(line) + "\n")
 
     print(f"[INFO] Batch file written: {output_path} ({len(input_records)} records)")
-
-
-def upload_file_to_gcs(local_path: str, bucket_name: str, gcs_path: str) -> None:
-    """Utility to upload a local file to GCS."""
-    storage_client = storage.Client(
-        project="agentic-486120", credentials=credentials
-    )
-    bucket = storage_client.bucket(bucket_name)
-    blob   = bucket.blob(gcs_path)
-    blob.upload_from_filename(local_path)
-    print(f"[INFO] Uploaded {local_path} to gs://{bucket_name}/{gcs_path}")
-
-def create_vertex_ai_batch_job(job_display_name: str,
-                                 gcs_source: str,
-                                 gcs_destination_prefix: str,
-                                 instance_format: str = "jsonl",
-                                 prediction_format: str = "jsonl",
-                                 model_name: str = "publishers/meta/models/llama-4-maverick-17b-128e-instruct-maas",
-                                 ) -> None:
-     """Utility to create a Vertex AI batch prediction job."""
-     aiplatform.init(project="agentic-486120", credentials=credentials)
-    
-     batch_job = aiplatform.BatchPredictionJob.create(
-          job_display_name=job_display_name,
-          model_name=model_name,
-          gcs_source=gcs_source,
-          gcs_destination_prefix=gcs_destination_prefix,
-          instances_format=instance_format,
-          predictions_format=prediction_format,
-     )
-     print(f"[INFO] Created Vertex AI batch job: {batch_job.resource_name}")    
 
 
 # ===========================================================================
@@ -242,7 +210,7 @@ def parse_llama_batch_output(llama_results: list[dict],
         # Extract content from Vertex AI MaaS response structure
         try:
             content = (
-                result["response"]["choices"][0]["message"]["content"]
+                result["response"]["body"]["choices"][0]["message"]["content"]
             )
         except (KeyError, IndexError, TypeError):
             print(f"[WARNING] Could not extract content for id '{qid}' — skipping.")
@@ -370,7 +338,7 @@ def validate_synthetic_turn(turn: dict,
 
 def convert_to_multiturn(question: dict,
                           llm,
-                          num_turns: int = 3) -> dict | None:
+                          num_turns: int = 3) -> Optional[dict]:
     """
     Convert a single BioASQ question into a validated multi-turn dialogue
     using the loaded Gemini model directly (non-batch path).
@@ -632,7 +600,7 @@ Return ONLY valid JSON — no preamble, no markdown:
 
 def judge_conversation(model,
                         original_q: list[dict],
-                        followups: list[dict]) -> dict | None:
+                        followups: list[dict]) -> Optional[dict]:
     """
     Run the Gemini decomposition judge and return parsed scores.
 
@@ -679,10 +647,10 @@ def create_judge_input(llama_results: list[dict],
             # Extract content from Vertex AI MaaS response structure
             try:
                 llama_output = (
-                    item["response"]["choices"][0]["message"]["content"]
+                    item["response"]["body"]["choices"][0]["message"]["content"]
                 )
             except (KeyError, IndexError, TypeError):
-                print(f"[WARNING] Skipping malformed result: {item}")
+                print(f"[WARNING] Skipping malformed result: {item.get('custom_id')}")
                 continue
 
             judge_prompt = (
@@ -709,7 +677,7 @@ def create_judge_input(llama_results: list[dict],
 # Entry Point
 # ===========================================================================
 
-def run() -> dict | None:
+def run() -> Optional[dict]:
     """
     Full pipeline run:
       1. Fetch Llama batch outputs from GCS.
@@ -721,29 +689,6 @@ def run() -> dict | None:
     """
     bucket_name = "bioasq-bucket"
 
-    questions      = load_bioasq_dataset(
-        str(PROJECT_ROOT / "data" / "BioASQ-training14b" / "training14b.json")
-    )
-
-    balanced_questions = []
-    types = ['yesno', 'summary', 'factoid', 'list']
-    for t in types:
-        balanced_questions.extend(get_questions_by_type(questions, t, 25))
-    processed_qs = [parse_question(q) for q in balanced_questions]
-    llama_input_path = str(PROJECT_ROOT / "data" / "corpus" / "llama_input.jsonl")
-    prepare_llama_batch_file(processed_qs, llama_input_path)
-    print(f"[INFO] Batch input prepared.")
-    print(f"[INFO] Uploading {llama_input_path} to GCS...")
-    filename = os.path.basename(llama_input_path) + f"_{int(time.time())}"
-    upload_file_to_gcs(llama_input_path, bucket_name, filename)
-    print(f"[INFO] Finished uploading")
-    print("[INFO] Running Vertex AI batch job...")
-    create_vertex_ai_batch_job(
-        job_display_name=f"bioasq_to_coqa_conversion",
-        gcs_source=f"gs://{bucket_name}/{filename}",
-        gcs_destination_prefix=f"gs://{bucket_name}/output/"
-    )
-
     # Step 1: fetch
     llama_results = get_batch_outputs(bucket_name)
 
@@ -752,6 +697,12 @@ def run() -> dict | None:
 
     # Step 3: create judge input
     create_judge_input(llama_results)
+
+    # Step 4: load BioASQ and parse
+    questions      = load_bioasq_dataset(
+        str(PROJECT_ROOT / "data" / "BioASQ-training14b" / "training14b.json")
+    )
+    processed_qs   = [parse_question(q) for q in questions]
 
     # Step 5: parse outputs → structured dialogues
     dialogues = parse_llama_batch_output(llama_results, processed_qs)
@@ -764,12 +715,11 @@ def run() -> dict | None:
     # Step 6: decomposition judge on a small sample
     genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
     model   = genai.GenerativeModel("gemini-2.5-pro")
-    metrics = judge_conversation(model, processed_qs[:100], llama_results[:100])
+    metrics = judge_conversation(model, processed_qs[:10], llama_results[:10])
     print("Decomposition Quality Metrics:", metrics)
 
     return metrics
 
 
 if __name__ == "__main__":
-    # TODO: Pass original question and answer to the judge.
     run()

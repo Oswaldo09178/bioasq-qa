@@ -1,3 +1,31 @@
+from typing import Optional, Union, List, Dict, Tuple, Any
+# RAG System — Oswaldo / Joel / Lowami
+#
+# Full pipeline orchestrator for the Conversational Biomedical QA System.
+#
+# CLI usage:
+#   python rag_system.py --retriever hybrid --generator gpt4 --k 5
+#   python rag_system.py --retriever bm25   --generator medgemma --k 10
+#   python rag_system.py --retriever none   --generator gemini --k 5
+#   python rag_system.py --retriever dense  --generator gpt4 --k 5 --eval
+#   python rag_system.py --chat             --generator gpt4
+#
+# --retriever options:
+#   none    — skip retrieval, use BioASQ snippets directly (good for ablation)
+#   bm25    — sparse BM25 only
+#   dense   — dense BGE-M3 embeddings only
+#   hybrid  — BM25 + dense + RRF + cross-encoder reranking (default)
+#
+# --generator options:
+#   gpt4       — OpenAI GPT-4o  (requires OPENAI_API_KEY)
+#   gemini     — Google Gemini 2.5 Pro  (requires GOOGLE_API_KEY)
+#   medgemma   — HuggingFace google/medgemma-4b-it
+#   pubmedbert — HuggingFace microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract
+#
+# --k : top-K documents to retrieve (default: 5)
+# --eval : run full evaluation after batch inference and save results
+# --chat : launch interactive multi-turn CLI session
+
 import argparse
 import json
 import os
@@ -6,7 +34,10 @@ import time
 import uuid
 from pathlib import Path
 from dotenv import load_dotenv
-load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
+load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")  # explicit path to project root .env
+
+# Resolve src/ and src/utils/ relative to this file so imports work
+# regardless of the working directory the script is called from.
 _SRC_DIR   = Path(__file__).resolve().parent
 _UTILS_DIR = _SRC_DIR / "utils"
 sys.path.insert(0, str(_SRC_DIR))
@@ -22,6 +53,7 @@ from generation_utils import (
 from conversation_manager import ConversationManager
 from evaluation import run_full_evaluation
 
+# Retrieval imports — loaded lazily to avoid errors when retriever=none
 def _import_retrieval():
     from retrieval_utils import (
         build_bm25_index, bm25_retrieve,
@@ -46,6 +78,10 @@ def _import_retrieval():
     }
 
 
+# ===========================================================================
+# Generator config map
+# ===========================================================================
+
 GENERATOR_CONFIGS = {
     "gpt4":       {"model_name": "gpt-4o",                                                    "backend": "openai"},
     "gemini":     {"model_name": "gemini-2.0-flash",                                            "backend": "google"},
@@ -54,10 +90,15 @@ GENERATOR_CONFIGS = {
 }
 
 # Cross-encoder model for hybrid reranking (Joel's config)
-CROSSENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+CROSSENCODER_MODEL = "cross-encoder/qnli-MiniLM2-L6"
 
 # Default index paths
 INDEX_DIR = Path("output/indices")
+
+
+# ===========================================================================
+# BioASQRAGSystem
+# ===========================================================================
 
 class BioASQRAGSystem:
 
@@ -85,7 +126,7 @@ class BioASQRAGSystem:
         self._retrieval                = None   # lazy-loaded retrieval module
 
         # Generation state
-        self._llm: dict | None         = None
+        self._llm: Optional[dict]         = None
 
         # Session registry: session_id → ConversationManager
         self._sessions: dict[str, ConversationManager] = {}
@@ -100,6 +141,10 @@ class BioASQRAGSystem:
             raise ValueError(f"--retriever must be one of {valid_retrievers}, got '{self.retriever_type}'")
         if self.generator_type not in valid_generators:
             raise ValueError(f"--generator must be one of {valid_generators}, got '{self.generator_type}'")
+
+    # -----------------------------------------------------------------------
+    # Setup
+    # -----------------------------------------------------------------------
 
     def load_generator(self) -> None:
         """Load the LLM specified by --generator."""
@@ -171,6 +216,10 @@ class BioASQRAGSystem:
                 )
                 self._retrieval["save_dense_index"](self._dense_embs, str(dense_path))
 
+    # -----------------------------------------------------------------------
+    # Retrieval
+    # -----------------------------------------------------------------------
+
     def retrieve(self, query: str) -> list[dict]:
         """
         Run the configured retrieval pipeline for a single query.
@@ -205,6 +254,9 @@ class BioASQRAGSystem:
 
         return []
 
+    # -----------------------------------------------------------------------
+    # Single-question answering
+    # -----------------------------------------------------------------------
 
     def answer(self,
                question: dict,
@@ -315,6 +367,9 @@ class BioASQRAGSystem:
 
         return pred
 
+    # -----------------------------------------------------------------------
+    # Batch inference
+    # -----------------------------------------------------------------------
 
     def run_batch(self,
                   questions: list[dict],
@@ -356,6 +411,9 @@ class BioASQRAGSystem:
         print(f"[INFO] Batch complete — {len(predictions)} predictions")
         return predictions
 
+    # -----------------------------------------------------------------------
+    # Interactive multi-turn chat
+    # -----------------------------------------------------------------------
 
     def chat(self,
              user_message: str,
@@ -381,6 +439,10 @@ class BioASQRAGSystem:
         answer = pred["answer"]
         return answer if isinstance(answer, str) else " ".join(answer)
 
+    # -----------------------------------------------------------------------
+    # Session management
+    # -----------------------------------------------------------------------
+
     def _get_or_create_session(self, session_id: str = None) -> ConversationManager:
         """Return existing session or create a new one."""
         if session_id is None:
@@ -394,12 +456,16 @@ class BioASQRAGSystem:
         if session_id in self._sessions:
             self._sessions[session_id].reset()
 
-    def get_session_state(self, session_id: str) -> dict | None:
+    def get_session_state(self, session_id: str) -> Optional[dict]:
         """Serialize session state — used for logging and debugging."""
         if session_id in self._sessions:
             return self._sessions[session_id].to_dict()
         return None
 
+
+# ===========================================================================
+# CLI
+# ===========================================================================
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -530,6 +596,11 @@ def _run_interactive_chat(system: "BioASQRAGSystem") -> None:
 
         answer = system.chat(user_input, session_id)
         print(f"\nAssistant: {answer}\n")
+
+
+# ===========================================================================
+# Entry Point
+# ===========================================================================
 
 def main():
     args = parse_args()

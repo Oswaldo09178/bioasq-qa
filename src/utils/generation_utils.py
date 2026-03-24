@@ -179,8 +179,9 @@ def _generate_hf(prompt: str, llm: dict,
         outputs = model.generate(
             **inputs,
             max_new_tokens=max_tokens,
-            temperature=max(temperature, 1e-4),  # avoid 0 temperature error
-            do_sample=temperature > 0.01,
+            do_sample=False,         # greedy decoding — avoids nan/inf on GPU
+            temperature=None,        # must be None when do_sample=False
+            top_p=None,              # must be None when do_sample=False
             pad_token_id=tokenizer.eos_token_id,
             eos_token_id=tokenizer.eos_token_id,
         )

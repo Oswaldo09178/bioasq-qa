@@ -328,7 +328,7 @@ def rerank_with_crossencoder(query: str,
     For biomedical: "cross-encoder/nli-MiniLM2-L6-H768"
     """
     cfg = (config or {}).get("retrieval", {})
-    model_name = model_name or cfg.get("crossencoder_model", "cross-encoder/qnli-MiniLM2-L6")
+    model_name = model_name or cfg.get("crossencoder_model", "cross-encoder/ms-marco-MiniLM-L-6-v2")
     top_k = top_k or cfg.get("rerank_top_k", 5)
 
     cross_encoder = CrossEncoder(model_name)

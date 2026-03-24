@@ -1,21 +1,21 @@
 {
   "phase": "B",
   "yesno": {
-    "macro_f1": 1.0,
-    "accuracy": 1.0,
-    "n": 5
+    "macro_f1": 0.8945,
+    "accuracy": 0.9091,
+    "n": 1541
   },
   "factoid": {
-    "mrr": 0.0,
-    "n": 0
+    "mrr": 0.3755,
+    "n": 1695
   },
   "list": {
-    "mean_f1": 0.4691,
-    "n": 4
+    "mean_f1": 0.3513,
+    "n": 1130
   },
   "summary": {
-    "rouge_l": 0.1798,
+    "rouge_l": 0.2897,
     "mean_judge_score": null,
-    "n": 1
+    "n": 1363
   }
 }

@@ -52,14 +52,14 @@ def load_llm(model_name: str, backend: str = "huggingface") -> dict:
     backend = backend.lower()
 
     if backend == "huggingface":
-        from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+        from transformers import AutoTokenizer, AutoModelForCausalLM
         import torch
 
         print(f"[INFO] Loading HuggingFace model: {model_name}")
         tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForSeq2SeqLM.from_pretrained(
+        model = AutoModelForCausalLM.from_pretrained(
             model_name,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
             device_map="auto",
         )
         model.eval()
@@ -163,24 +163,31 @@ def _generate_hf(prompt: str, llm: dict,
     tokenizer = llm["tokenizer"]
     model     = llm["model"]
 
+    # Ensure pad token is set (required for causal LMs like MedGemma)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
     inputs = tokenizer(
         prompt,
         return_tensors="pt",
         truncation=True,
         max_length=2048,
+        padding=True,
     ).to(model.device)
 
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
             max_new_tokens=max_tokens,
-            temperature=temperature,
-            do_sample=temperature > 0,
+            temperature=max(temperature, 1e-4),  # avoid 0 temperature error
+            do_sample=temperature > 0.01,
             pad_token_id=tokenizer.eos_token_id,
+            eos_token_id=tokenizer.eos_token_id,
         )
 
-    # Decode only the newly generated tokens (skip the prompt)
-    generated = outputs[0][inputs["input_ids"].shape[1]:]
+    # Decode only newly generated tokens (skip the input prompt tokens)
+    input_length = inputs["input_ids"].shape[1]
+    generated    = outputs[0][input_length:]
     return tokenizer.decode(generated, skip_special_tokens=True).strip()
 
 

@@ -28,7 +28,8 @@ set -a && source .env && set +a
 
 mkdir -p logs output/prediction output/evaluation output/indices
 
-DATA="data/BioASQ-training14b/training14b.json"
+# DATA="data/BioASQ-training14b/training14b.json"
+DATA="data/small.json"
 export HF_HOME=$PWD/.hf_cache
 
 # =============================================================================

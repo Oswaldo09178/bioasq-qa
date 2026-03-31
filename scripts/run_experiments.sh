@@ -29,6 +29,7 @@ set -a && source .env && set +a
 mkdir -p logs output/prediction output/evaluation output/indices
 
 DATA="data/BioASQ-training14b/training14b.json"
+export HF_HOME=$PWD/.hf_cache
 
 # =============================================================================
 # H1 — Retriever Ablation (same generator, swap retriever)

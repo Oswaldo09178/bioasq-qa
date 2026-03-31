@@ -213,7 +213,7 @@ init_session()
 import sys as _sys
 RESEARCH_MODE = "--research" in _sys.argv
 
-DEFAULT_RETRIEVER = "hybrid"
+DEFAULT_RETRIEVER = "bm25"
 DEFAULT_GENERATOR = "gemini"
 DEFAULT_K         = 5
 DEFAULT_DATA      = str(PROJECT_ROOT / "data" / "BioASQ-training14b" / "training14b.json")
@@ -226,7 +226,7 @@ with st.sidebar:
         DEFAULT_RETRIEVER = st.selectbox(
             "Retriever",
             ["hybrid", "dense", "bm25", "none"],
-            index=0,
+            index=2,
         )
         DEFAULT_GENERATOR = st.selectbox(
             "Generator",

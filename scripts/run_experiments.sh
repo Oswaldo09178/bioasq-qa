@@ -2,7 +2,7 @@
 #SBATCH --job-name=bioasq_experiments
 #SBATCH --output=logs/bioasq_%j.out
 #SBATCH --error=logs/bioasq_%j.err
-#SBATCH --time=24:00:00
+#SBATCH --time=48:00:00
 #SBATCH --mem=64G
 #SBATCH --cpus-per-task=8
 #SBATCH --partition=general
@@ -28,8 +28,8 @@ set -a && source .env && set +a
 
 mkdir -p logs output/prediction output/evaluation output/indices
 
-# DATA="data/BioASQ-training14b/training14b.json"
-DATA="data/small.json"
+DATA="data/BioASQ-training14b/training14b.json"
+# DATA="data/small.json"
 export HF_HOME=$PWD/.hf_cache
 
 # =============================================================================

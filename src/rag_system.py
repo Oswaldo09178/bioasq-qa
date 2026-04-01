@@ -341,9 +341,11 @@ class BioASQRAGSystem:
         if isinstance(answer_str, list):
             answer_str = " ".join(answer_str)
 
-        grounding = check_answer_grounded(
-            answer_str, retrieved_docs, body, self._llm
-        )
+        # --- Grounding check ---
+        if self.retriever_type == "none":
+            grounding = {"grounded": True, "flagged": False}
+        else:
+            grounding = check_answer_grounded(answer_str, retrieved_docs, body, self._llm)
 
         # --- Update conversation history ---
         manager.add_turn("user",      body,                retrieved_docs=retrieved_docs)

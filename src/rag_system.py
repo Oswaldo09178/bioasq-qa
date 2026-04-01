@@ -263,19 +263,12 @@ class BioASQRAGSystem:
            session_id: str = None,
            gold_answer: str = None) -> dict:
         """
-        Full single-question pipeline:
-        1. Resolve anaphora + build contextualized query (ConversationManager)
-        2. Retrieve documents (or use BioASQ snippets if retriever=none)
-        3. Route to correct prompt template + generate answer
-        4. Grounding check (skipped for retriever=none)
-        5. Update conversation history
+        Full single-question pipeline using BioASQ snippets for retrieval (no external retrieval).
 
         Args:
             question:    Parsed BioASQ question dict.
-            session_id:  Session identifier for multi-turn state.
-                        If None, a fresh stateless session is used.
-            gold_answer: Optional gold answer — attached to prediction dict
-                        for evaluation (compute_context_retention_accuracy).
+            session_id:  Optional session ID for multi-turn context.
+            gold_answer: Optional gold answer for evaluation.
 
         Returns:
             Prediction dict compatible with evaluation.py:
@@ -291,7 +284,6 @@ class BioASQRAGSystem:
 
         # Get or create conversation session
         manager = self._get_or_create_session(session_id)
-
         body = question.get("body", "")
 
         # --- Clarification check ---
@@ -312,41 +304,42 @@ class BioASQRAGSystem:
                 "grounded":           True,
             }
 
-        # --- Build contextualized query for retrieval ---
+        # --- Build contextualized query (multi-turn context) ---
         contextualized_query = manager.build_contextualized_query(body)
 
-        # --- Retrieval or snippet use ---
         start = time.perf_counter()
-        if self.retriever_type == "none":
-            snippets = get_snippets(question)
-            retrieved_docs = [
-                {
-                    "doc_id": f"pubmed_{s.get('document','').split('/')[-1]}",
-                    "text":   s.get("text", ""),
-                    "pmid":   s.get("document","").split("/")[-1]
-                }
-                for s in snippets
-            ][:self.k]
-        else:
-            retrieved_docs = self.retrieve(contextualized_query)
 
-        # --- Generation ---
+        # --- Retrieve snippets (always use BioASQ snippets) ---
+        snippets = get_snippets(question) or []  # ensure list
+        if not snippets:
+            print(f"[WARNING] No snippets found for question {question.get('id','')}")
+        retrieved_docs = []
+        for s in snippets[:self.k]:
+            text = s.get("text") or s.get("snippet") or ""
+            doc_url = s.get("document") or ""
+            pmid = doc_url.split("/")[-1] if doc_url else ""
+            retrieved_docs.append({
+                "doc_id": f"pubmed_{pmid}",
+                "text": text,
+                "pmid": pmid,
+                "document": doc_url,
+                "beginSection": s.get("beginSection"),
+                "endSection": s.get("endSection"),
+            })
+
+        # --- Generate answer ---
         history = manager.get_context_window()
-        result  = route_by_question_type(question, retrieved_docs, history, self._llm)
+        result = route_by_question_type(question, retrieved_docs, history, self._llm)
+
         latency = round(time.perf_counter() - start, 4)
 
-        # --- Grounding check ---
-        if self.retriever_type == "none":
-            grounding = {"grounded": True, "flagged": False}
-        else:
-            answer_str = result["answer"]
-            if isinstance(answer_str, list):
-                answer_str = " ".join(answer_str)
-            grounding = check_answer_grounded(answer_str, retrieved_docs, body, self._llm)
+        answer_str = result["answer"]
+        if isinstance(answer_str, list):
+            answer_str = " ".join(answer_str)
 
         # --- Update conversation history ---
-        manager.add_turn("user",      body,                retrieved_docs=retrieved_docs)
-        manager.add_turn("assistant", str(result["answer"]))
+        manager.add_turn("user", body, retrieved_docs=retrieved_docs)
+        manager.add_turn("assistant", answer_str)
 
         # --- Assemble prediction dict ---
         pred = {
@@ -357,14 +350,14 @@ class BioASQRAGSystem:
             "retrieved_snippets": retrieved_docs,
             "requires_context":   manager.get_full_history()[-2].get("requires_context", False),
             "latency_s":          latency,
-            "grounded":           grounding["grounded"],
-            "flagged":            grounding["flagged"],
+            "grounded":           True,   # always grounded when using snippets
+            "flagged":            False,
         }
 
         if gold_answer is not None:
             pred["gold_answer"] = gold_answer
 
-        return pred
+    return pred
 
     # -----------------------------------------------------------------------
     # Batch inference

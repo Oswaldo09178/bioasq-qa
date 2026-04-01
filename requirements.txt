@@ -14,8 +14,8 @@ dotenv==0.9.9
 filelock==3.25.2
 fsspec==2026.2.0
 google-ai-generativelanguage==0.6.15
-google-api-core>=2.30.0
-grpcio-status>=1.78.0
+google-api-core
+grpcio-status
 google-api-python-client==2.192.0
 google-auth==2.49.0
 google-auth-httplib2==0.3.0
@@ -93,4 +93,4 @@ websockets==16.0
 xxhash==3.6.0
 yarl==1.22.0
 zipp==3.23.0
-streamlit==1.28.0
+streamlit

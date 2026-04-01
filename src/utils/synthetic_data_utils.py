@@ -25,7 +25,6 @@ import re
 import time
 from pathlib import Path
 
-import google.generativeai as genai
 from dotenv import load_dotenv
 from google.cloud import storage
 from google.oauth2 import service_account
@@ -713,6 +712,7 @@ def run() -> Optional[dict]:
     get_synthetic_dataset_stats(dialogues)
 
     # Step 6: decomposition judge on a small sample
+    import google.generativeai as genai
     genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
     model   = genai.GenerativeModel("gemini-2.5-pro")
     metrics = judge_conversation(model, processed_qs[:10], llama_results[:10])

@@ -12,3 +12,4 @@ data/BioASQ-training14b
 __pycache__/
 *.pyc
 output/indices/
+data/synthetic/dialogues.json

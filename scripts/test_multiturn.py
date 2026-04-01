@@ -9,7 +9,7 @@ from synthetic_data_utils import load_synthetic_dataset
 
 system = BioASQRAGSystem(retriever="hybrid", generator="gemini", k=5)
 system.load_generator()
-system.index_corpus([])  # indices already built
+# system.index_corpus([])  # indices already built
 
 dialogues    = load_synthetic_dataset("data/synthetic/dialogues.json")
 predictions  = []
@@ -17,13 +17,12 @@ predictions  = []
 for dialogue in dialogues:
     session_id = dialogue["source_id"]   # one session per dialogue
     for turn in dialogue["turns"]:
-        if turn["role"] != "user":       # skip assistant turns
-            continue
+        # no 'role' field in your JSON, so we assume every turn is a user turn
         question = {
-            "id":           f"{session_id}_turn{turn['turn_id']}",
-            "body":         turn["query"],
-            "type":         dialogue["question_type"],
-            "snippets":     dialogue["snippets"],
+            "id":       f"{session_id}_turn{turn['turn_id']}",
+            "body":     turn["query"],
+            "type":     dialogue["question_type"],
+            "snippets": dialogue["snippets"],
         }
         pred = system.answer(
             question,

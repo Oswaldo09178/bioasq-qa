@@ -357,7 +357,7 @@ class BioASQRAGSystem:
         if gold_answer is not None:
             pred["gold_answer"] = gold_answer
 
-    return pred
+        return pred
 
     # -----------------------------------------------------------------------
     # Batch inference

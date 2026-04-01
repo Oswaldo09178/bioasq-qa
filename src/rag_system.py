@@ -319,16 +319,31 @@ class BioASQRAGSystem:
         start = time.perf_counter()
 
         if self.retriever_type == "none":
-            # Use BioASQ's own snippets directly — ablation / oracle mode
             snippets = get_snippets(question)
             retrieved_docs = [
                 {"doc_id": f"pubmed_{s.get('document','').split('/')[-1]}",
-                 "text":   s.get("text", ""),
-                 "pmid":   s.get("document","").split("/")[-1]}
+                "text":   s.get("text", ""),
+                "pmid":   s.get("document","").split("/")[-1]}
                 for s in snippets
             ][:self.k]
         else:
             retrieved_docs = self.retrieve(contextualized_query)
+
+        # --- Generation ---
+        history = manager.get_context_window()
+        result  = route_by_question_type(question, retrieved_docs, history, self._llm)
+
+        latency = round(time.perf_counter() - start, 4)
+
+        # --- Grounding check ---
+        answer_str = result["answer"]
+        if isinstance(answer_str, list):
+            answer_str = " ".join(answer_str)
+
+        if self.retriever_type == "none":
+            grounding = {"grounded": True, "flagged": False}
+        else:
+            grounding = check_answer_grounded(answer_str, retrieved_docs, body, self._llm)
 
         # --- Generation ---
         history = manager.get_context_window()

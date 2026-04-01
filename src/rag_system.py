@@ -259,23 +259,23 @@ class BioASQRAGSystem:
     # -----------------------------------------------------------------------
 
     def answer(self,
-               question: dict,
-               session_id: str = None,
-               gold_answer: str = None) -> dict:
+           question: dict,
+           session_id: str = None,
+           gold_answer: str = None) -> dict:
         """
         Full single-question pipeline:
-          1. Resolve anaphora + build contextualized query (ConversationManager)
-          2. Retrieve documents (or use BioASQ snippets if retriever=none)
-          3. Route to correct prompt template + generate answer
-          4. Grounding check
-          5. Update conversation history
+        1. Resolve anaphora + build contextualized query (ConversationManager)
+        2. Retrieve documents (or use BioASQ snippets if retriever=none)
+        3. Route to correct prompt template + generate answer
+        4. Grounding check (skipped for retriever=none)
+        5. Update conversation history
 
         Args:
             question:    Parsed BioASQ question dict.
             session_id:  Session identifier for multi-turn state.
-                         If None, a fresh stateless session is used.
+                        If None, a fresh stateless session is used.
             gold_answer: Optional gold answer — attached to prediction dict
-                         for evaluation (compute_context_retention_accuracy).
+                        for evaluation (compute_context_retention_accuracy).
 
         Returns:
             Prediction dict compatible with evaluation.py:
@@ -315,15 +315,16 @@ class BioASQRAGSystem:
         # --- Build contextualized query for retrieval ---
         contextualized_query = manager.build_contextualized_query(body)
 
-        # --- Retrieval ---
+        # --- Retrieval or snippet use ---
         start = time.perf_counter()
-
         if self.retriever_type == "none":
             snippets = get_snippets(question)
             retrieved_docs = [
-                {"doc_id": f"pubmed_{s.get('document','').split('/')[-1]}",
-                "text":   s.get("text", ""),
-                "pmid":   s.get("document","").split("/")[-1]}
+                {
+                    "doc_id": f"pubmed_{s.get('document','').split('/')[-1]}",
+                    "text":   s.get("text", ""),
+                    "pmid":   s.get("document","").split("/")[-1]
+                }
                 for s in snippets
             ][:self.k]
         else:
@@ -332,34 +333,15 @@ class BioASQRAGSystem:
         # --- Generation ---
         history = manager.get_context_window()
         result  = route_by_question_type(question, retrieved_docs, history, self._llm)
-
         latency = round(time.perf_counter() - start, 4)
-
-        # --- Grounding check ---
-        answer_str = result["answer"]
-        if isinstance(answer_str, list):
-            answer_str = " ".join(answer_str)
-
-        if self.retriever_type == "none":
-            grounding = {"grounded": True, "flagged": False}
-        else:
-            grounding = check_answer_grounded(answer_str, retrieved_docs, body, self._llm)
-
-        # --- Generation ---
-        history = manager.get_context_window()
-        result  = route_by_question_type(question, retrieved_docs, history, self._llm)
-
-        latency = round(time.perf_counter() - start, 4)
-
-        # --- Grounding check ---
-        answer_str = result["answer"]
-        if isinstance(answer_str, list):
-            answer_str = " ".join(answer_str)
 
         # --- Grounding check ---
         if self.retriever_type == "none":
             grounding = {"grounded": True, "flagged": False}
         else:
+            answer_str = result["answer"]
+            if isinstance(answer_str, list):
+                answer_str = " ".join(answer_str)
             grounding = check_answer_grounded(answer_str, retrieved_docs, body, self._llm)
 
         # --- Update conversation history ---

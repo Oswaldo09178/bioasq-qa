@@ -213,7 +213,7 @@ init_session()
 import sys as _sys
 RESEARCH_MODE = "--research" in _sys.argv
 
-DEFAULT_RETRIEVER = "none"
+DEFAULT_RETRIEVER = "hybrid"
 DEFAULT_GENERATOR = "gemini"
 DEFAULT_K         = 5
 DEFAULT_DATA      = str(PROJECT_ROOT / "data" / "BioASQ-training14b" / "training14b.json")
@@ -226,7 +226,7 @@ with st.sidebar:
         DEFAULT_RETRIEVER = st.selectbox(
             "Retriever",
             ["hybrid", "dense", "bm25", "none"],
-            index=3,
+            index=0,
         )
         DEFAULT_GENERATOR = st.selectbox(
             "Generator",
@@ -337,33 +337,18 @@ with chat_col:
                 latency  = meta.get("latency_s", 0)
                 grounded = meta.get("grounded", False)
 
-                # Render content as plain markdown (safe — no raw HTML injection)
+                # Content — rendered as native Streamlit markdown (safe)
                 border_color = "#f59e0b" if flagged else "#10b981"
-                st.markdown(
-                    f"<div style='border-left:3px solid {border_color};"
-                    f"background:#f8fafc;padding:0.9rem 1rem;"
-                    f"border-radius:0 6px 6px 0;margin:0.8rem 0;'></div>",
-                    unsafe_allow_html=True
-                )
-                st.markdown(msg["content"])
+                with st.container():
+                    st.markdown(msg["content"])
 
-                # Badges rendered separately — no user content inside HTML
-                ground_badge = (
-                    "<span class='badge badge-ok'>grounded</span>"
-                    if grounded else
-                    "<span class='badge badge-warn'>unverified</span>"
-                )
-                flag_badge = (
-                    "<span class='badge badge-warn'>⚠ flagged</span>"
-                    if flagged else ""
-                )
+                # Metadata row — use st.caption for simple inline text
+                # Avoids all HTML rendering issues
+                ground_icon = "✅ grounded" if grounded else "⚠️ unverified"
+                flag_text   = " · ⚠️ flagged" if flagged else ""
+                st.caption(f"{qtype} · {ground_icon}{flag_text} · {latency:.2f}s")
                 st.markdown(
-                    f"<div class='meta-row'>"
-                    f"<span class='badge badge-type'>{qtype}</span>"
-                    f"{ground_badge}"
-                    f"{flag_badge}"
-                    f"<span class='badge badge-time'>{latency:.2f}s</span>"
-                    f"</div>",
+                    f"<hr style='border:none;border-top:0.5px solid #e2e8f0;margin:4px 0 12px 0;'>",
                     unsafe_allow_html=True
                 )
 

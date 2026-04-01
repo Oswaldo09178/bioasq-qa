@@ -10,6 +10,7 @@ nltk
 
 openai
 google-generativeai
+google-genai
 
 python-dotenv
 requests

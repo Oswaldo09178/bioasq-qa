@@ -34,6 +34,13 @@ from typing import Optional, Union, List, Dict, Tuple, Any
 #           shape detection (inputs_tensor.shape[0] raises AttributeError).
 #           Fix: call without those kwargs, handle both return types explicitly,
 #           truncate manually, and pass input_ids as a keyword arg to generate().
+#   [FIX-6] _generate_hf: temperature=0.1 caused logit underflow to -inf in
+#           float16 on L40S GPU, making the probability tensor contain inf/nan
+#           and triggering CUDA device-side assert: "probability tensor contains
+#           either `inf`, `nan` or element < 0". Fixed by raising temperature
+#           to 0.7 (safe numerical range for float16) and adding top_k=50 as
+#           a secondary guard. Also added explicit attention_mask to resolve
+#           the pad_token==eos_token warning that contributed to nan logits.
 
 import json
 import os
@@ -254,14 +261,28 @@ def _generate_hf(prompt: str, llm: dict, max_tokens: int, temperature: float) ->
     if input_ids.shape[-1] > 2048:
         input_ids = input_ids[:, -2048:]
 
-    # [FIX-2] Low-temperature sampling — structured, non-degenerate outputs.
+    # Build attention mask explicitly — required when pad_token == eos_token
+    # (MedGemma's case). Without it, transformers cannot infer the mask and
+    # may produce incorrect results or nan logits on the GPU.
+    attention_mask = torch.ones_like(input_ids)
+
+    # [FIX-2/FIX-6] Sampling with temperature=0.7 + top_k=50.
+    # temperature=0.1 caused logit underflow to -inf in float16 on the L40S,
+    # making the probability tensor contain inf/nan and triggering a CUDA
+    # device-side assert: "probability tensor contains either `inf`, `nan`
+    # or element < 0". Raising temperature to 0.7 keeps logits in a safe
+    # numerical range. top_k=50 acts as an additional guard — it clips the
+    # distribution to the 50 most probable tokens before sampling, preventing
+    # near-zero probability mass from producing invalid values.
     with torch.no_grad():
         outputs = model.generate(
-            input_ids=input_ids,       # keyword arg — avoids positional ambiguity
+            input_ids=input_ids,
+            attention_mask=attention_mask,
             max_new_tokens=max_tokens,
             do_sample=True,
-            temperature=0.1,
+            temperature=0.7,
             top_p=0.9,
+            top_k=50,
             pad_token_id=tokenizer.eos_token_id,
             eos_token_id=tokenizer.eos_token_id,
         )

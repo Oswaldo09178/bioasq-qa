@@ -4,12 +4,36 @@ from typing import Optional, Union, List, Dict, Tuple, Any
 # and strict grounding verification.
 #
 # Supports three backends:
-#   - "huggingface" : local models (PubMedBERT, MedGemma)
+#   - "huggingface" : local models (MedGemma-4B-it)
 #   - "openai"      : GPT-4 via OpenAI API
-#   - "google"      : Gemini/MedPaLM via Google API
+#   - "google"      : Gemini via Google GenAI SDK (google-genai, NOT google-generativeai)
 #
 # The grounding check uses the judge prompt from prompt_templates.py
 # and is the primary safeguard against hallucination (Risk R1).
+#
+# Fix history:
+#   [FIX-1] _generate_hf: use tokenizer.apply_chat_template() instead of raw
+#           tokenizer() call. MedGemma-4B-it is instruction-tuned and requires
+#           its chat template — sending a raw string bypasses it entirely.
+#   [FIX-2] _generate_hf: replaced greedy decoding (do_sample=False) with
+#           low-temperature sampling (temperature=0.1, top_p=0.9).
+#           Greedy decoding caused a strong "yes" bias on yesno questions and
+#           produced repetitive outputs that parse_answer() could not parse.
+#           The original nan/inf GPU error on L40S was caused by passing
+#           temperature/top_p with do_sample=False — that combination is now
+#           correct and safe.
+#   [FIX-3] parse_answer / yesno: removed the hardcoded "yes" fallback default.
+#           The old code silently returned "yes" for any unparseable yesno
+#           output, making MedGemma appear to predict "yes" for every question
+#           it could not parse, corrupting the entire yesno evaluation.
+#           Now returns "" so evaluation treats unparseable outputs as missing.
+#   [FIX-4] _generate_hf: apply_chat_template return type varies across
+#           transformers versions. Calling it with truncation=True/max_length
+#           causes it to return a BatchEncoding (dict-like) instead of a raw
+#           tensor in newer versions, which breaks model.generate()'s internal
+#           shape detection (inputs_tensor.shape[0] raises AttributeError).
+#           Fix: call without those kwargs, handle both return types explicitly,
+#           truncate manually, and pass input_ids as a keyword arg to generate().
 
 import json
 import os
@@ -37,11 +61,9 @@ def load_llm(model_name: str, backend: str = "huggingface") -> dict:
 
     Args:
         model_name: Model identifier.
-                    HuggingFace : "ncbi/MedCPT-Query-Encoder",
-                                  "microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract",
-                                  "google/medgemma-4b-it"
+                    HuggingFace : "google/medgemma-4b-it"
                     OpenAI      : "gpt-4o", "gpt-4-turbo"
-                    Google      : "gemini-1.5-pro"
+                    Google      : "gemini-2.0-flash"
         backend:    "huggingface" | "openai" | "google"
 
     Returns:
@@ -57,10 +79,25 @@ def load_llm(model_name: str, backend: str = "huggingface") -> dict:
 
         print(f"[INFO] Loading HuggingFace model: {model_name}")
         tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+        # device_map="auto" on a CPU-only machine (e.g. Mac without GPU) causes
+        # accelerate to offload layers to disk. Gemma3 has tied embeddings
+        # (lm_head shares weights with embed_tokens) that break during disk-offload
+        # reload, producing a ValueError shape mismatch at forward pass time.
+        # On CUDA machines (Babel L40S) "auto" correctly places everything on GPU.
+        if torch.cuda.is_available():
+            device_map = "auto"
+            torch_dtype = torch.float16
+        else:
+            # CPU-only: load entirely in RAM, no disk offload, no shape mismatch.
+            # Slow for inference but correct — fine for local --limit 10 validation.
+            device_map = "cpu"
+            torch_dtype = torch.float32
+
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
-            dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto",
+            torch_dtype=torch_dtype,
+            device_map=device_map,
         )
         model.eval()
         return {
@@ -109,18 +146,22 @@ def load_llm(model_name: str, backend: str = "huggingface") -> dict:
         }
 
     else:
-        raise ValueError(f"Unknown backend '{backend}'. Use 'huggingface', 'openai', or 'google'.")
+        raise ValueError(
+            f"Unknown backend '{backend}'. Use 'huggingface', 'openai', or 'google'."
+        )
 
 
 # ===========================================================================
 # Core Generation
 # ===========================================================================
 
-def generate_answer(prompt: str,
-                    llm: dict,
-                    max_tokens: int = 1024,
-                    temperature: float = 0.1,
-                    retries: int = 3) -> str:
+def generate_answer(
+    prompt: str,
+    llm: dict,
+    max_tokens: int = 1024,
+    temperature: float = 0.1,
+    retries: int = 3,
+) -> str:
     """
     Run inference on the given prompt using the loaded LLM.
 
@@ -134,7 +175,7 @@ def generate_answer(prompt: str,
 
     Returns:
         Raw string response from the model. Parsing (JSON, list extraction,
-        yes/no extraction) is handled downstream by the caller.
+        yes/no extraction) is handled downstream by parse_answer().
     """
     backend = llm["backend"]
 
@@ -157,44 +198,81 @@ def generate_answer(prompt: str,
     return ""
 
 
-def _generate_hf(prompt: str, llm: dict,
-                 max_tokens: int, temperature: float) -> str:
-    import torch
-    tokenizer = llm["tokenizer"]
-    model     = llm["model"]
+def _generate_hf(prompt: str, llm: dict, max_tokens: int, temperature: float) -> str:
+    """
+    HuggingFace backend — targets instruction-tuned causal LMs (MedGemma-4B-it).
 
-    # Ensure pad token is set (required for causal LMs like MedGemma)
+    FIX-1: apply_chat_template() is required for instruction-tuned models.
+    The tokenizer wraps the prompt in the model's expected format
+    (system/user/assistant roles, special tokens). Bypassing this with a raw
+    tokenizer() call causes the model to receive malformed input and produce
+    unstructured, unparseable output.
+
+    FIX-2: Low-temperature sampling replaces greedy decoding.
+    do_sample=True + temperature=0.1 + top_p=0.9 produces structured outputs
+    that match our prompt templates' expected format. Greedy decoding caused:
+      (a) strong "yes" bias on yesno questions (highest-probability first token)
+      (b) repetitive, format-breaking outputs on factoid/list/summary questions
+    The original nan/inf GPU error on L40S is NOT caused by sampling — it was
+    caused by passing temperature/top_p alongside do_sample=False, which
+    HuggingFace rejects. That combination is now removed.
+
+    FIX-4: apply_chat_template return type varies across transformers versions.
+    With truncation=True/max_length it returns a BatchEncoding (dict-like);
+    without those kwargs it returns a raw tensor. We call it without truncation
+    kwargs and handle both return types explicitly, then truncate manually.
+    input_ids is passed as a keyword argument to model.generate() — passing it
+    positionally failed when transformers expected a BatchEncoding at position 0.
+    """
+    import torch
+
+    tokenizer = llm["tokenizer"]
+    model = llm["model"]
+
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    inputs = tokenizer(
-        prompt,
-        return_tensors="pt",
-        truncation=True,
-        max_length=2048,
-        padding=True,
-    ).to(model.device)
+    messages = [{"role": "user", "content": prompt}]
 
+    # [FIX-4] Call without truncation/max_length to get a consistent tensor.
+    # Some transformers versions return BatchEncoding when those kwargs are
+    # present, which breaks model.generate()'s shape detection.
+    chat_inputs = tokenizer.apply_chat_template(
+        messages,
+        add_generation_prompt=True,
+        return_tensors="pt",
+    )
+
+    # Handle both return types defensively
+    if hasattr(chat_inputs, "input_ids"):
+        input_ids = chat_inputs["input_ids"].to(model.device)
+    else:
+        input_ids = chat_inputs.to(model.device)
+
+    # Manual truncation — keep the last 2048 tokens (preserves the tail,
+    # which contains the actual question, not the front padding)
+    if input_ids.shape[-1] > 2048:
+        input_ids = input_ids[:, -2048:]
+
+    # [FIX-2] Low-temperature sampling — structured, non-degenerate outputs.
     with torch.no_grad():
         outputs = model.generate(
-            **inputs,
+            input_ids=input_ids,       # keyword arg — avoids positional ambiguity
             max_new_tokens=max_tokens,
-            do_sample=False,         # greedy decoding — avoids nan/inf on GPU
-            temperature=None,        # must be None when do_sample=False
-            top_p=None,              # must be None when do_sample=False
+            do_sample=True,
+            temperature=0.1,
+            top_p=0.9,
             pad_token_id=tokenizer.eos_token_id,
             eos_token_id=tokenizer.eos_token_id,
         )
 
-    # Decode only newly generated tokens (skip the input prompt tokens)
-    input_length = inputs["input_ids"].shape[1]
-    generated    = outputs[0][input_length:]
-    return tokenizer.decode(generated, skip_special_tokens=True).strip()
+    # Decode only the newly generated tokens (strip the input prompt)
+    generated_ids = outputs[0][input_ids.shape[-1]:]
+    return tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
 
 
-def _generate_openai(prompt: str, llm: dict,
-                     max_tokens: int, temperature: float) -> str:
-    client     = llm["model"]
+def _generate_openai(prompt: str, llm: dict, max_tokens: int, temperature: float) -> str:
+    client = llm["model"]
     model_name = llm["model_name"]
 
     response = client.chat.completions.create(
@@ -206,10 +284,10 @@ def _generate_openai(prompt: str, llm: dict,
     return response.choices[0].message.content.strip()
 
 
-def _generate_google(prompt: str, llm: dict,
-                     max_tokens: int, temperature: float) -> str:
+def _generate_google(prompt: str, llm: dict, max_tokens: int, temperature: float) -> str:
     from google.genai import types
-    client     = llm["model"]
+
+    client = llm["model"]
     model_name = llm["model_name"]
 
     response = client.models.generate_content(
@@ -229,13 +307,12 @@ def _generate_google(prompt: str, llm: dict,
     candidates = response.candidates or []
     for candidate in candidates:
         try:
-            for part in (candidate.content.parts or []):
+            for part in candidate.content.parts or []:
                 if hasattr(part, "text") and part.text:
                     return part.text.strip()
         except AttributeError:
             continue
 
-    # Log what we got for debugging
     print(f"[DEBUG] Full response: {response}")
     raise ValueError(
         "Gemini returned no text content. "
@@ -247,11 +324,14 @@ def _generate_google(prompt: str, llm: dict,
 # Question Type Router
 # ===========================================================================
 
-def route_by_question_type(question: dict,
-                            snippets: list[dict],
-                            history: list[dict],
-                            llm: dict,
-                            max_tokens: int = 512) -> dict:
+def route_by_question_type(
+    question: dict,
+    snippets: list[dict],
+    history: list[dict],
+    llm: dict,
+    max_tokens: int = 512,
+    debug: bool = False,
+) -> dict:
     """
     Select the correct prompt template based on question type,
     generate the answer, and return a structured result.
@@ -262,20 +342,21 @@ def route_by_question_type(question: dict,
         history:    Context window from ConversationManager.get_context_window().
         llm:        Model handle from load_llm().
         max_tokens: Passed to generate_answer().
+        debug:      If True, prints raw model output and parsed answer.
+                    Use for validation runs (--limit 10) before full SLURM jobs.
 
     Returns:
         {
-            "question_id":  str,
+            "question_id":   str,
             "question_type": str,
-            "raw_response": str,   # full model output
-            "answer":       Union[str, list],  # parsed answer
+            "raw_response":  str,         # full model output (for logging/debugging)
+            "answer":        str | list,  # parsed answer
         }
     """
-    qtype  = question.get("type", "summary").lower()
-    body   = question.get("body", "")
-    qid    = question.get("id", "")
+    qtype = question.get("type", "summary").lower()
+    body = question.get("body", "")
+    qid = question.get("id", "")
 
-    # Select prompt builder by question type
     prompt_builders = {
         "summary": build_summary_prompt,
         "yesno":   build_yesno_prompt,
@@ -288,13 +369,20 @@ def route_by_question_type(question: dict,
         qtype = "summary"
 
     prompt = prompt_builders[qtype](body, snippets, history)
-    raw    = generate_answer(prompt, llm, max_tokens=max_tokens)
+    raw = generate_answer(prompt, llm, max_tokens=max_tokens)
+    parsed = parse_answer(raw, qtype)
+
+    if debug:
+        print(f"[DEBUG] qid={qid} qtype={qtype}")
+        print(f"[DEBUG] raw[:400]={raw[:400]!r}")
+        print(f"[DEBUG] parsed={parsed!r}")
+        print("---")
 
     return {
         "question_id":   qid,
         "question_type": qtype,
         "raw_response":  raw,
-        "answer":        parse_answer(raw, qtype),
+        "answer":        parsed,
     }
 
 
@@ -311,11 +399,14 @@ def parse_answer(raw_response: str, qtype: str) -> Union[str, list]:
         qtype:        Question type — drives parsing strategy.
 
     Returns:
-        - "summary"  → str  (text after "ANSWER:" marker)
-        - "yesno"    → str  ("yes" or "no")
-        - "factoid"  → list[str]  (up to 3 candidates, ordered)
+        - "summary"  → str   (text after "ANSWER:" marker, or full response)
+        - "yesno"    → str   ("yes", "no", or "" if unparseable — see FIX-3)
+        - "factoid"  → list[str]  (up to 3 numbered candidates)
         - "list"     → list[str]  (all bullet items)
     """
+    if not raw_response:
+        return "" if qtype in ("summary", "yesno") else []
+
     if qtype == "summary":
         if "ANSWER:" in raw_response:
             return raw_response.split("ANSWER:")[-1].strip()
@@ -323,37 +414,61 @@ def parse_answer(raw_response: str, qtype: str) -> Union[str, list]:
 
     elif qtype == "yesno":
         lower = raw_response.lower()
+
+        # Priority 1: explicit "Answer: yes/no" marker (from prompt template)
         if "answer: yes" in lower:
             return "yes"
-        elif "answer: no" in lower:
+        if "answer: no" in lower:
             return "no"
-        # Fallback: scan for standalone yes/no
-        for line in lower.split("\n"):
-            if line.strip() in ("yes", "no"):
-                return line.strip()
-        return "yes"  # safe default — flagged for review by judge
+
+        # Priority 2: standalone yes/no on its own line
+        for line in lower.splitlines():
+            stripped = line.strip()
+            if stripped in ("yes", "no"):
+                return stripped
+
+        # Priority 3: first-word heuristic — catches "Yes, ..." / "No, ..."
+        # only when it is the very first word of the response
+        first_word = lower.split()[0].rstrip(".,;:") if lower.split() else ""
+        if first_word in ("yes", "no"):
+            return first_word
+
+        # [FIX-3] No hardcoded default. Return "" so the evaluation layer
+        # treats this question as unanswered rather than silently inflating
+        # yes-counts. The judge will flag it as ungrounded separately.
+        print(f"[WARNING] yesno parse failed — no yes/no found in output: {raw_response[:120]!r}")
+        return ""
 
     elif qtype == "factoid":
-        # Extract numbered list items
+        # Extract numbered list items: "1. answer text"
         candidates = []
-        for line in raw_response.split("\n"):
+        for line in raw_response.splitlines():
             line = line.strip()
             if line and line[0].isdigit() and "." in line:
                 candidate = line.split(".", 1)[-1].strip()
                 if candidate:
                     candidates.append(candidate)
-        return candidates[:3] if candidates else [raw_response.strip()]
+        if candidates:
+            return candidates[:3]
+        # Fallback: return the full response as a single candidate rather than
+        # an empty list — MRR can still score a correct full-text match.
+        stripped = raw_response.strip()
+        return [stripped] if stripped else []
 
     elif qtype == "list":
-        # Extract bullet items
+        # Extract bullet items: "- item text"
         items = []
-        for line in raw_response.split("\n"):
+        for line in raw_response.splitlines():
             line = line.strip()
             if line.startswith("-"):
                 item = line.lstrip("-").strip()
                 if item:
                     items.append(item)
-        return items if items else [raw_response.strip()]
+        if items:
+            return items
+        # Fallback: return non-empty lines as items
+        lines = [l.strip() for l in raw_response.splitlines() if l.strip()]
+        return lines if lines else []
 
     return raw_response.strip()
 
@@ -362,11 +477,13 @@ def parse_answer(raw_response: str, qtype: str) -> Union[str, list]:
 # Strict Grounding Check
 # ===========================================================================
 
-def check_answer_grounded(answer: str,
-                           snippets: list[dict],
-                           question: str,
-                           judge_llm: dict,
-                           score_threshold: int = 3) -> dict:
+def check_answer_grounded(
+    answer: str,
+    snippets: list[dict],
+    question: str,
+    judge_llm: dict,
+    score_threshold: int = 3,
+) -> dict:
     """
     Verify that the generated answer is supported by retrieved snippets.
     Uses the LLM-as-judge approach (build_judge_prompt) to assess
@@ -380,30 +497,45 @@ def check_answer_grounded(answer: str,
         snippets:        The same snippets used to generate the answer.
         question:        Original question body (for judge context).
         judge_llm:       A (possibly different) LLM used as evaluator.
-                         Can be the same model or a stronger one (e.g. GPT-4).
+                         Can be the same model or a stronger one (e.g. Gemini).
         score_threshold: Answers with factuality_score < this are flagged.
 
     Returns:
         {
             "grounded":         bool,
             "flagged":          bool,
-            "factuality_score": int (1-5),
+            "factuality_score": int (1–5),
             "reasoning":        str,
         }
     """
-    prompt   = build_judge_prompt(question, answer, snippets)
-    raw      = generate_answer(prompt, judge_llm, max_tokens=256, temperature=0.0)
+    # Empty answers are trivially ungrounded — skip judge call
+    if not answer or (isinstance(answer, list) and not any(answer)):
+        return {
+            "grounded":         False,
+            "flagged":          True,
+            "factuality_score": 0,
+            "reasoning":        "Empty answer — nothing to ground.",
+        }
 
-    # Strip markdown fences if model adds them
-    clean = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    prompt = build_judge_prompt(question, answer, snippets)
+    raw = generate_answer(prompt, judge_llm, max_tokens=256, temperature=0.0)
+
+    # Strip markdown fences if model wraps the JSON in code blocks
+    clean = (
+        raw.strip()
+        .removeprefix("```json")
+        .removeprefix("```")
+        .removesuffix("```")
+        .strip()
+    )
 
     try:
         result = json.loads(clean)
+        score = int(result.get("factuality_score", 0))
         return {
             "grounded":         bool(result.get("grounded", False)),
-            "flagged":          bool(result.get("flagged", False))
-                                or int(result.get("factuality_score", 0)) < score_threshold,
-            "factuality_score": int(result.get("factuality_score", 0)),
+            "flagged":          bool(result.get("flagged", False)) or score < score_threshold,
+            "factuality_score": score,
             "reasoning":        result.get("reasoning", ""),
         }
 
@@ -421,9 +553,7 @@ def check_answer_grounded(answer: str,
 # Clarification Generator
 # ===========================================================================
 
-def generate_clarification(question: str,
-                            history: list[dict],
-                            llm: dict) -> str:
+def generate_clarification(question: str, history: list[dict], llm: dict) -> str:
     """
     Called by rag_system.py when ConversationManager.is_query_underspecified()
     returns True. Generates a clarifying question to ask the user.

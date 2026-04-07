@@ -13,3 +13,9 @@ __pycache__/
 *.pyc
 output/indices/
 data/synthetic/dialogues.json
+output/
+output/
+.venv/
+.hf_cache/
+logs/
+data/small.json

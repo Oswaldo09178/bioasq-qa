@@ -45,10 +45,11 @@ def _format_history(history: list[dict]) -> str:
 
 
 GROUNDING_INSTRUCTION = (
-    "CRITICAL INSTRUCTION: Base your answer EXCLUSIVELY on the evidence snippets "
-    "provided above. Do NOT use any external knowledge or assumptions beyond what "
-    "is stated in the snippets. If the snippets do not contain enough information "
-    "to answer the question, state: 'Insufficient evidence in retrieved documents.'"
+    "IMPORTANT: Base your answer primarily on the evidence snippets provided above. "
+    "If the snippets are partially relevant, use them to construct the best possible answer — "
+    "do not refuse to answer just because the evidence is incomplete. "
+    "Only state 'Insufficient evidence in retrieved documents.' if the snippets are "
+    "completely unrelated to the question and you cannot derive any useful answer from them."
 )
 
 

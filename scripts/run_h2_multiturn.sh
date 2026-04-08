@@ -6,7 +6,7 @@
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=general
-# No GPU needed — Gemini is API-based
+#SBATCH --gres=gpu:L40S:1
 
 source .venv/bin/activate
 python scripts/test_multiturn.py

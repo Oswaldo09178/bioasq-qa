@@ -1,4 +1,3 @@
-cat > scripts/run_h2_multiturn.sh << 'EOF'
 #!/bin/bash
 #SBATCH --job-name=h2_multiturn
 #SBATCH --output=logs/h2_multiturn_%j.out
@@ -11,4 +10,3 @@ cat > scripts/run_h2_multiturn.sh << 'EOF'
 
 source .venv/bin/activate
 python scripts/test_multiturn.py
-EOF

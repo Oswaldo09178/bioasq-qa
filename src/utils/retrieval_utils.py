@@ -1,4 +1,5 @@
 # Retrieval functions (Joel)
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import sys
 import os
@@ -355,6 +356,52 @@ def rerank_with_crossencoder(query: str,
     return scored_candidates[:top_k]
 
 # ===========================================================================
+# Parallel Batching
+# ===========================================================================
+
+def process_single_question(args):
+    q, bm25_index, embeddings, encoder, cross_encoder, corpus, top_k = args
+    query = q.get("body", "")
+    q_id = q.get("id", "")
+
+    bm25_res = bm25_retrieve(query, bm25_index, corpus, top_k=top_k)
+    dense_res = dense_retrieve(query, embeddings, encoder, corpus, top_k=top_k)
+    hybrid_res = reciprocal_rank_fusion(bm25_res, dense_res)
+
+    pairs = [(query, doc["text"]) for doc in hybrid_res[:top_k]]
+    scores = cross_encoder.predict(pairs)
+    reranked = sorted(
+        [{"doc_id": d["doc_id"], "text": d["text"], "pmid": d["pmid"], "rerank_score": float(s)}
+         for d, s in zip(hybrid_res[:top_k], scores)],
+        key=lambda x: x["rerank_score"], reverse=True
+    )
+
+    return {"question_id": q_id, "results": reranked}
+
+
+def batch_retrieve_parallel(questions, bm25_index, embeddings, encoder, cross_encoder, corpus, top_k=10, max_workers=8):
+    args_list = [
+        (q, bm25_index, embeddings, encoder, cross_encoder, corpus, top_k)
+        for q in questions
+    ]
+    results = [None] * len(questions)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_idx = {
+            executor.submit(process_single_question, args): i
+            for i, args in enumerate(args_list)
+        }
+        for future in as_completed(future_to_idx):
+            idx = future_to_idx[future]
+            try:
+                results[idx] = future.result()
+            except Exception as e:
+                print(f"[ERROR] Question {idx} failed: {e}")
+                results[idx] = {"question_id": questions[idx].get("id", ""), "results": []}
+
+    return results
+
+# ===========================================================================
 # Main Runner
 # ===========================================================================
 
@@ -376,16 +423,15 @@ if __name__ == "__main__":
     embeddings, encoder = build_dense_index(corpus, model_name="BAAI/bge-m3")
 
     print("[INFO] Running hybrid retrieval...")
-    results = []
-    for i, q in enumerate(questions):
-        query = q.get("body", "")
-        bm25_res = bm25_retrieve(query, bm25_index, corpus, top_k=10)
-        dense_res = dense_retrieve(query, embeddings, encoder, corpus, top_k=10)
-        hybrid_res = reciprocal_rank_fusion(bm25_res, dense_res)
-        results.append({"question_id": q.get("id"), "results": hybrid_res[:10]})
-        if i % 100 == 0:
-            print(f"[INFO] Processed {i}/{len(questions)} questions...")
+    print("[INFO] Loading cross-encoder model...")
+    from sentence_transformers import CrossEncoder
+    cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
 
+    print("[INFO] Running parallel hybrid retrieval...")
+    results = batch_retrieve_parallel(
+        questions, bm25_index, embeddings, encoder, cross_encoder, corpus,
+        top_k=10, max_workers=8
+    )
     with open(OUTPUT_PATH, "w") as f:
         json.dump(results, f)
     print(f"[INFO] Done! Results saved to {OUTPUT_PATH}")

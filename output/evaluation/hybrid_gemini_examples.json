@@ -1,0 +1,645 @@
+{
+  "successes": {
+    "yesno": [
+      {
+        "question_id": "54e25eaaae9738404b000017",
+        "question_type": "yesno",
+        "question": "Is the protein Papilin secreted?",
+        "prediction": "yes",
+        "gold": "yes",
+        "score": 1.0,
+        "latency_s": 1.9172
+      },
+      {
+        "question_id": "535d292a9a4572de6f000003",
+        "question_type": "yesno",
+        "question": "Are long non coding RNAs spliced?",
+        "prediction": "yes",
+        "gold": "yes",
+        "score": 1.0,
+        "latency_s": 2.3095
+      },
+      {
+        "question_id": "55262a9787ecba3764000009",
+        "question_type": "yesno",
+        "question": "Is RANKL secreted from the cells?",
+        "prediction": "yes",
+        "gold": "yes",
+        "score": 1.0,
+        "latency_s": 2.5787
+      },
+      {
+        "question_id": "51406e6223fec90375000009",
+        "question_type": "yesno",
+        "question": "Does metformin interfere thyroxine absorption?",
+        "prediction": "no",
+        "gold": "no",
+        "score": 1.0,
+        "latency_s": 2.5266
+      },
+      {
+        "question_id": "52bf1db603868f1b06000011",
+        "question_type": "yesno",
+        "question": "Has Denosumab (Prolia) been approved by FDA?",
+        "prediction": "yes",
+        "gold": "yes",
+        "score": 1.0,
+        "latency_s": 2.1712
+      }
+    ],
+    "factoid": [
+      {
+        "question_id": "54d73e223706e89528000010",
+        "question_type": "factoid",
+        "question": "What is the generic name of Gliolan?",
+        "prediction": "no",
+        "gold": [
+          "5-aminolevulinic acid"
+        ],
+        "score": 1.0,
+        "latency_s": 2.2965
+      },
+      {
+        "question_id": "51651e24298dcd4e51000054",
+        "question_type": "factoid",
+        "question": "How many genera comprise the Flaviviridae family?",
+        "prediction": "The Barr body is the inactive X chromosome in a female somatic cell. It can be identified as a plano-convex structure of 2-3 micron in diameter on the periphery of the nuclear membrane.",
+        "gold": [
+          "three",
+          "3"
+        ],
+        "score": 1.0,
+        "latency_s": 2.0873
+      },
+      {
+        "question_id": "56f6d11c09dd18d46b00000f",
+        "question_type": "factoid",
+        "question": "Which is the protein encoded by the human gene GRIK?",
+        "prediction": "no",
+        "gold": [
+          "glutamate receptor ionotropic kainate"
+        ],
+        "score": 1.0,
+        "latency_s": 7.151
+      },
+      {
+        "question_id": "515db3d8298dcd4e51000015",
+        "question_type": "factoid",
+        "question": "What is the average diameter of intermediate filaments?",
+        "prediction": "no",
+        "gold": [
+          "10 nanometers",
+          "10 nm"
+        ],
+        "score": 1.0,
+        "latency_s": 2.6794
+      },
+      {
+        "question_id": "56a8d660a17756b72f000006",
+        "question_type": "factoid",
+        "question": "What is the link between Nonidet-40 (NP-40) and biotinylation?",
+        "prediction": "no",
+        "gold": [
+          "Reduction of contamination by endogenous biotinylated carboxylases during purification of biotin tagged nuclear proteins."
+        ],
+        "score": 1.0,
+        "latency_s": 2.6429
+      }
+    ],
+    "list": [
+      {
+        "question_id": "553fa78b1d53b76422000007",
+        "question_type": "list",
+        "question": "Which miRNAs could be used as potential biomarkers for epithelial ovarian cancer?",
+        "prediction": "miR-132 | miR-26a | let-7b | miR-145 | miR-182 | miR-200a | miR-200b | miR-200c | Let-7i | microRNA-21",
+        "gold": [
+          [
+            "let-7a"
+          ],
+          [
+            "let-7b"
+          ],
+          [
+            "let-7i"
+          ],
+          [
+            "miR-21"
+          ],
+          [
+            "miR-26a"
+          ],
+          [
+            "miR-92"
+          ],
+          [
+            "miR-93"
+          ],
+          [
+            "miR-100"
+          ],
+          [
+            "miR-132"
+          ],
+          [
+            "miR-141"
+          ],
+          [
+            "miR-145"
+          ],
+          [
+            "miR-148a"
+          ],
+          [
+            "miR-152"
+          ],
+          [
+            "miR-182"
+          ],
+          [
+            "miR-200a"
+          ],
+          [
+            "miR-200b"
+          ],
+          [
+            "miR-200c"
+          ],
+          [
+            "miR-203"
+          ],
+          [
+            "miR-509-5p"
+          ],
+          [
+            "miR-510"
+          ]
+        ],
+        "score": 0.6,
+        "latency_s": 3.0154
+      },
+      {
+        "question_id": "5149199dd24251bc05000040",
+        "question_type": "list",
+        "question": "Which acetylcholinesterase inhibitors are used for treatment of myasthenia gravis?",
+        "prediction": "Pyridostigmine bromide | Neostigmine",
+        "gold": [
+          [
+            "neostigmine"
+          ],
+          [
+            "pyridostigmine"
+          ]
+        ],
+        "score": 0.5,
+        "latency_s": 2.297
+      },
+      {
+        "question_id": "55046d5ff8aee20f27000007",
+        "question_type": "list",
+        "question": "List signaling molecules (ligands) that interact with the receptor EGFR?",
+        "prediction": "EGF | TGF-\u03b1 | amphiregulin (AREG) | heparin-binding EGF-like growth factor (HB-EGF) | betacellulin | epiregulin | epigen",
+        "gold": [
+          [
+            "epidermal growth factor"
+          ],
+          [
+            "betacellulin"
+          ],
+          [
+            "epiregulin"
+          ],
+          [
+            "heparin-binding epidermal growth factor"
+          ],
+          [
+            "transforming growth factor-\u03b1"
+          ],
+          [
+            "amphiregulin"
+          ],
+          [
+            "epigen"
+          ]
+        ],
+        "score": 0.42857142857142855,
+        "latency_s": 2.3327
+      },
+      {
+        "question_id": "5a888b56d543831129000002",
+        "question_type": "list",
+        "question": "What induces Arabidopsis ROF1 expression?",
+        "prediction": "Redness | Heat | Swelling | Pain",
+        "gold": [
+          [
+            "Wounding"
+          ],
+          [
+            "Elevated NaCl levels"
+          ],
+          [
+            "Heat"
+          ]
+        ],
+        "score": 0.28571428571428575,
+        "latency_s": 2.0082
+      },
+      {
+        "question_id": "5709e4b2cf1c32585100001c",
+        "question_type": "list",
+        "question": "List the human genes encoding for the dishevelled proteins?",
+        "prediction": "*   DVL1",
+        "gold": [
+          [
+            "DVL-1"
+          ],
+          [
+            "DVL-2"
+          ],
+          [
+            "DVL-3"
+          ]
+        ],
+        "score": 0.0,
+        "latency_s": 2.1468
+      }
+    ],
+    "summary": [
+      {
+        "question_id": "52e204a998d0239505000012",
+        "question_type": "summary",
+        "question": "Which is the definition of pyknons in DNA?",
+        "prediction": "LincRNAs are involved in the genetic regulation of gene expression, potentially regulating neighboring protein-coding genes or transcription in cis. The genetic regulation of lincRNA expression can be independent of the regulation of neighboring protein-coding genes. LincRNAs may play a crucial role in shaping the landscape of gene regulation.",
+        "gold": "Pyknons are non-random sequence patterns significantly repeated throughout non-coding genomic DNA, which have additional nonoverlapping instances in the untranslated and protein-coding regions. They are found more frequently in the 3' untranslated regions of genes than in other regions of the human genome.",
+        "score": 0.2316,
+        "latency_s": 3.2188
+      },
+      {
+        "question_id": "55031181e9bde69634000014",
+        "question_type": "summary",
+        "question": "Is Hirschsprung disease a mendelian or a multifactorial disorder?",
+        "prediction": "Hirschsprung disease is a multifactorial, non-mendelian disorder. However, Mendelian syndromic forms of Hirschsprung's disease also exist.",
+        "gold": "Coding sequence mutations in RET, GDNF, EDNRB, EDN3, and SOX10 are involved in the development of Hirschsprung disease. The majority of these genes was shown to be related to Mendelian syndromic forms of Hirschsprung's disease, whereas the non-Mendelian inheritance of sporadic non-syndromic Hirschsprung disease proved to be complex; involvement of multiple loci was demonstrated in a multiplicative model.",
+        "score": 0.2278,
+        "latency_s": 6.3046
+      },
+      {
+        "question_id": "660d17dffdcbea915f000037",
+        "question_type": "summary",
+        "question": "Trends of acute epiglottitis in children.",
+        "prediction": "*   Alterations in the ectodomain of EGFR",
+        "gold": "Mortality due to epiglottitis in children has decreased since the adoption of the Haemophilus influenza Type b vaccination (Hib) in pediatric populations.",
+        "score": 0.2143,
+        "latency_s": 3.4405
+      },
+      {
+        "question_id": "65f59db8c4010b4d78000014",
+        "question_type": "summary",
+        "question": "Brunner's gland hamartoma (BGH) is often asymptomatic and so how is it usually diagnosed?",
+        "prediction": "Oculopharyngeal muscular dystrophy (OPMD) is a late-onset muscular dystrophy, primarily autosomal dominant. It is characterized by ptosis, dysphagia, and proximal muscle weakness.",
+        "gold": "Brunner's gland hamartoma (BGH) is a rare, benign tumor of the duodenum. It is mostly asymptomatic and usually found incidentally on routine esophagogastroduodenoscopy (EGD).",
+        "score": 0.2083,
+        "latency_s": 0.0
+      },
+      {
+        "question_id": "63f57f7f33942b094c000006",
+        "question_type": "summary",
+        "question": "What is Catamenial pneumothorax?",
+        "prediction": "Homeotic transformation is the transformation of one body part into something that resembles another body part. An example of this is the transformation of cervical vertebrae into thoracic vertebrae.",
+        "gold": "Catamenial pneumothorax is defined as a recurrent, spontaneous pneumothorax occurring within a day before or 72 h after the onset of menstruation. It is a manifestation of a thoracic endometriosis syndrome.",
+        "score": 0.2,
+        "latency_s": 3.3458
+      }
+    ]
+  },
+  "failures": {
+    "yesno": [
+      {
+        "question_id": "67e0053118b1e36f2e000067",
+        "question_type": "yesno",
+        "question": "Do MiOXSYS and OxiSperm measure ROS(Reactive Oxygen Species) in sperm?",
+        "prediction": "yes",
+        "gold": "no",
+        "score": 0.0,
+        "latency_s": 2.6313
+      },
+      {
+        "question_id": "67e2bde318b1e36f2e000093",
+        "question_type": "yesno",
+        "question": "Is obesity a risk factor for sleep apnea?",
+        "prediction": "no",
+        "gold": "yes",
+        "score": 0.0,
+        "latency_s": 2.1258
+      },
+      {
+        "question_id": "680fe1e3353a4a2e6b00000f",
+        "question_type": "yesno",
+        "question": "Is a single-nucleotide polymorphism (SNP) the same as a mutation?",
+        "prediction": "13% (mixed features) | 43% (LB group) | Insufficient evidence in retrieved documents.",
+        "gold": "no",
+        "score": 0.0,
+        "latency_s": 0.0
+      },
+      {
+        "question_id": "67fbe2ab18b1e36f2e000116",
+        "question_type": "yesno",
+        "question": "Do hyaluronic acid injections improve knee pain?",
+        "prediction": "Neurodegenerative disorder with spasticity, ataxia, neuropathy, and optic atrophy",
+        "gold": "yes",
+        "score": 0.0,
+        "latency_s": 2.406
+      },
+      {
+        "question_id": "67e090be18b1e36f2e00006c",
+        "question_type": "yesno",
+        "question": "Is Bacillus Clausii a probiotic?",
+        "prediction": "no",
+        "gold": "yes",
+        "score": 0.0,
+        "latency_s": 2.1717
+      }
+    ],
+    "factoid": [
+      {
+        "question_id": "680a21eb18b1e36f2e000150",
+        "question_type": "factoid",
+        "question": "What glial cells are responsible for myelination in the CNS?",
+        "prediction": "yes",
+        "gold": [
+          "Oligodendrocytes",
+          "Oligodendrocytes (OLs)",
+          "OLs",
+          "oligodendrocyte lineage cells",
+          "Oligodendroglial cells"
+        ],
+        "score": 0.0,
+        "latency_s": 2.2479
+      },
+      {
+        "question_id": "67fa3c5818b1e36f2e000109",
+        "question_type": "factoid",
+        "question": "What is BIONDA",
+        "prediction": "Restricting antigen recognition | Inhibiting the immune system | Inducing T cell exhaustion | Accumulating specific metabolites and signal factors within the TME | Limiting the nutrients available to immune cells | Downregulating antigen presentation | Hindering immune responses | Exploiting inhibitory immune checkpoints",
+        "gold": [
+          "Biomarker database"
+        ],
+        "score": 0.0,
+        "latency_s": 0.0
+      },
+      {
+        "question_id": "67fb046e18b1e36f2e00010c",
+        "question_type": "factoid",
+        "question": "What is the gene target for  Zanidatamab?",
+        "prediction": "Levodopa | Dopamine receptor agonists (like ropinirole) | Ropinirole | Gabapentin | L-dopa associated to its sustained release formulation | Dopamine agonists (DAs)",
+        "gold": [
+          "HER-2"
+        ],
+        "score": 0.0,
+        "latency_s": 2.201
+      },
+      {
+        "question_id": "67d71d8f18b1e36f2e00002b",
+        "question_type": "factoid",
+        "question": "Is Clostridioides difficile an aerobe or a anaerobe bacterium?",
+        "prediction": "Aedes mosquitoes | Aedes aegypti | Ae. albopictus",
+        "gold": [
+          "strict anaerobe"
+        ],
+        "score": 0.0,
+        "latency_s": 2.0482
+      },
+      {
+        "question_id": "67e2b0a018b1e36f2e00008b",
+        "question_type": "factoid",
+        "question": "Bacteria that most commonly causes urinary tract infection.",
+        "prediction": "Pathogenic role for large AAAGG repeat configuration expansions | Complex motifs with AAAGG interruptions | Insufficient evidence in retrieved documents.",
+        "gold": [
+          "Escherichia coli"
+        ],
+        "score": 0.0,
+        "latency_s": 2.3301
+      }
+    ],
+    "list": [
+      {
+        "question_id": "680c137818b1e36f2e000158",
+        "question_type": "list",
+        "question": "What cancer hallmarks are characteristically promoted by tumor microenvironment components, such as pericytes?",
+        "prediction": "Bone marrow monocytes | Bone marrow | Infiltrating macrophages",
+        "gold": [
+          [
+            "Angiogenesis",
+            "Inducing angiogenesis",
+            "tumor angiogenesis"
+          ],
+          [
+            "Growth",
+            "Sustaining proliferative signaling"
+          ],
+          [
+            "Metastasis",
+            "Activating invasion and metastasis"
+          ],
+          [
+            "Evasion of immune destruction",
+            "Evading immune destruction",
+            "immune evasion"
+          ]
+        ],
+        "score": 0.0,
+        "latency_s": 3.1954
+      },
+      {
+        "question_id": "6810c54b353a4a2e6b000011",
+        "question_type": "list",
+        "question": "Indications for Electro-convulsive therapy.",
+        "prediction": "HIV-1 infection | multi-drug-resistant HIV-1 infection",
+        "gold": [
+          [
+            "major depression"
+          ],
+          [
+            "schizophrenia"
+          ],
+          [
+            "psychosis"
+          ],
+          [
+            "bipolar disorder"
+          ],
+          [
+            "mood disorders"
+          ],
+          [
+            "catatonia"
+          ],
+          [
+            "neuroleptic malignant syndrome"
+          ],
+          [
+            "refractory self-injurious behavior"
+          ],
+          [
+            "suicide attempt history"
+          ],
+          [
+            "severe affective disoder"
+          ]
+        ],
+        "score": 0.0,
+        "latency_s": 2.5573
+      },
+      {
+        "question_id": "67eaf14c18b1e36f2e0000de",
+        "question_type": "list",
+        "question": "Which transcription factors are important to define human astrocyte identity?",
+        "prediction": "Cetuximab plus chemotherapy | mFOLFOX6 treatment | Cetuximab plus FOLFIRI followed by bevacizumab plus mFOLFOX6",
+        "gold": [
+          [
+            "NFIA",
+            "NFIB",
+            "NFI-X",
+            "NFI Family Transcription Factors",
+            "NFI-X3",
+            "NFI",
+            "NF I"
+          ],
+          [
+            "ATF3"
+          ],
+          [
+            "RUNX2"
+          ],
+          [
+            "ZBTB20"
+          ],
+          [
+            "SOX9",
+            "Sox9",
+            "Sox transcription factors"
+          ],
+          [
+            "PITX1"
+          ],
+          [
+            "NF-kappa B",
+            "NF kappaB",
+            "NF kB",
+            "NF-\u03baB"
+          ]
+        ],
+        "score": 0.0,
+        "latency_s": 2.0597
+      },
+      {
+        "question_id": "67cdb26a81b1027333000017",
+        "question_type": "list",
+        "question": "Please list the benefits of sodium-glucose cotransporter 2 inhibitors",
+        "prediction": "C/EBP\u03b2 | TAZ | STAT3",
+        "gold": [
+          [
+            "reduce hospitalization"
+          ],
+          [
+            "weight loss"
+          ],
+          [
+            "improve gycemic control"
+          ],
+          [
+            "improve renal outcome"
+          ],
+          [
+            "improve cardiovascular outcome"
+          ],
+          [
+            "improved blood pressure"
+          ]
+        ],
+        "score": 0.0,
+        "latency_s": 2.3969
+      },
+      {
+        "question_id": "67d7fded18b1e36f2e000042",
+        "question_type": "list",
+        "question": "Symptoms of chlamydia genital infection in women.",
+        "prediction": "Pseudomembranous colitis | Toxic megacolon | Septic shock | Fulminant colitis | Bowel perforation | Gram-negative sepsis | Clostridium difficile-associated diarrhea | Colitis",
+        "gold": [
+          [
+            "asymptomatic"
+          ],
+          [
+            "lower abdominal discomfort"
+          ],
+          [
+            "salpingitis"
+          ],
+          [
+            "peritonitis"
+          ],
+          [
+            "cervicitis"
+          ],
+          [
+            "urethritis"
+          ],
+          [
+            "infertility"
+          ],
+          [
+            "chronic pelvic pain"
+          ]
+        ],
+        "score": 0.0,
+        "latency_s": 2.0237
+      }
+    ],
+    "summary": [
+      {
+        "question_id": "680f4aa6353a4a2e6b000008",
+        "question_type": "summary",
+        "question": "What do snake antivenoms contain?",
+        "prediction": "CCL2 | CCL7 | CXCL12",
+        "gold": "Snake antivenoms contain antibodies that bind and inactivate venom components. These antibodies are typically derived from hyperimmune sera collected from animals, such as horses or sheep, that have been immunized with snake venom. Antivenoms can be formulated as whole IgG molecules (150 kDa), F(ab')(2) immunoglobulin fragments (100 kDa), or Fab immunoglobulin fragments (50 kDa). The serum is often processed to increase the concentration of venom-specific antibodies and reduce inactive proteins that could cause allergic reactions. Processing techniques may include precipitation of inactive proteins, chromatographic methods, and enzymatic cleavage of immunoglobulins to produce Fab or F(ab')2 fragments.",
+        "score": 0.0,
+        "latency_s": 3.2056
+      },
+      {
+        "question_id": "67cde43c81b102733300001e",
+        "question_type": "summary",
+        "question": "Please summarize Graves disease",
+        "prediction": "enhancer hijacking",
+        "gold": "Graves' disease is an autoimmune disorder causing hyperthyroidism due to antibodies stimulating the thyroid-stimulating hormone receptor, with symptoms like goiter and eye issues, and is treated with medication, radioactive iodine, or surgery.",
+        "score": 0.0,
+        "latency_s": 3.3472
+      },
+      {
+        "question_id": "680d5dd8353a4a2e6b000004",
+        "question_type": "summary",
+        "question": "Is Melatonin found in human milk?",
+        "prediction": "Sildenafil | Vardenafil",
+        "gold": "Yes, melatonin is found in human milk. As noted in Snippet1, melatonin in breast milk exhibits a 24-hour circadian rhythm \u2013 it is present in nighttime milk but nearly undetectable during the day, supporting its role in infant circadian entrainment.",
+        "score": 0.0,
+        "latency_s": 2.6835
+      },
+      {
+        "question_id": "67d7208218b1e36f2e00002e",
+        "question_type": "summary",
+        "question": "Physiopathology of alopecia.",
+        "prediction": "The pathophysiology of irritable bowel syndrome (IBS) is multifactorial, complex, and not completely understood. Factors implicated include visceral hypersensitivity, intestinal dysmotility, psychological factors, dysregulated gut-brain axis, intestinal microbiota alterations, impaired intestinal permeability, mucosal immune alterations, epithelial barrier dysfunction, genetic/social learning factors, diet, intestinal low-grade inflammation, and abnormal gastrointestinal endocrine cells.",
+        "gold": "",
+        "score": 0,
+        "latency_s": 0.0
+      },
+      {
+        "question_id": "67c9e46881b1027333000004",
+        "question_type": "summary",
+        "question": "What is a neoantigen?",
+        "prediction": "yes",
+        "gold": "A neoantigen is a tumor-specific antigen that arises from mutations in tumor cells and is capable of eliciting an immune response.",
+        "score": 0.0,
+        "latency_s": 2.7574
+      }
+    ]
+  }
+}

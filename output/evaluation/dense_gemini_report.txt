@@ -1,0 +1,38 @@
+EVALUATION REPORT — retriever=dense  generator=gemini
+======================================================================
+
+PHASE A — RETRIEVAL
+======================================================================
+  MAP:                   0.7019
+  Snippet F-measure:     0.7975
+  N questions:           5729
+
+PHASE B — GENERATION (by question type)
+======================================================================
+  YES/NO:
+    Macro F1:            0.8995
+    Accuracy:            0.9137
+    N:                   1541
+  FACTOID:
+    MRR:                 0.3669
+    N:                   1695
+  LIST:
+    Mean F1:             0.3387
+    N:                   1130
+  SUMMARY:
+    ROUGE-L:             0.2931
+    LLM Judge Score:     None
+    N:                   1363
+
+CONVERSATIONAL
+======================================================================
+  Context Retention Acc: 0.0
+  N context turns:       0
+
+LATENCY
+======================================================================
+  Mean latency (s):      1.8906
+  Min latency (s):       0.0
+  Max latency (s):       8.9397
+  Throughput (q/s):      0.5289
+  N timed:               5729

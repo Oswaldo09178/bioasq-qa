@@ -5,6 +5,17 @@ data/corpus
 data/BioASQ-training14b/training14b.json
 **/*.jsonl
 **/__pycache__venv/
+**/__pycache__/
 venv/
 data/BioASQ-training14b/training14b.json
 data/BioASQ-training14b
+__pycache__/
+*.pyc
+output/indices/
+data/synthetic/dialogues.json
+output/
+output/
+.venv/
+.hf_cache/
+logs/
+data/small.json

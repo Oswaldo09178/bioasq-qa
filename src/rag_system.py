@@ -1,3 +1,4 @@
+from typing import Optional, Union, List, Dict, Tuple, Any
 # RAG System — Oswaldo / Joel / Lowami
 #
 # Full pipeline orchestrator for the Conversational Biomedical QA System.
@@ -24,6 +25,17 @@
 # --k : top-K documents to retrieve (default: 5)
 # --eval : run full evaluation after batch inference and save results
 # --chat : launch interactive multi-turn CLI session
+#
+# Fix history:
+#   [FIX-5] index_corpus / dense: added corpus-size validation before loading
+#           a cached dense index. Without this check, a --limit N run loaded
+#           the full-dataset dense index (78762 entries) against a 121-chunk
+#           corpus, causing dense_retrieve() to return indices > len(corpus)
+#           and crash with IndexError: list index out of range.
+#           Now mirrors the existing BM25 mismatch check: if the saved dense
+#           index row count != current corpus size, the index is rebuilt.
+#           Uses numpy mmap_mode="r" to read only the header (shape) without
+#           loading the full 78k-row matrix into memory just for the check.
 
 import argparse
 import json
@@ -33,10 +45,8 @@ import time
 import uuid
 from pathlib import Path
 from dotenv import load_dotenv
-load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")  # explicit path to project root .env
+load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 
-# Resolve src/ and src/utils/ relative to this file so imports work
-# regardless of the working directory the script is called from.
 _SRC_DIR   = Path(__file__).resolve().parent
 _UTILS_DIR = _SRC_DIR / "utils"
 sys.path.insert(0, str(_SRC_DIR))
@@ -52,7 +62,7 @@ from generation_utils import (
 from conversation_manager import ConversationManager
 from evaluation import run_full_evaluation
 
-# Retrieval imports — loaded lazily to avoid errors when retriever=none
+
 def _import_retrieval():
     from retrieval_utils import (
         build_bm25_index, bm25_retrieve,
@@ -63,17 +73,17 @@ def _import_retrieval():
         save_dense_index, load_dense_index,
     )
     return {
-        "build_bm25_index":        build_bm25_index,
-        "bm25_retrieve":           bm25_retrieve,
-        "build_dense_index":       build_dense_index,
-        "dense_retrieve":          dense_retrieve,
-        "reciprocal_rank_fusion":  reciprocal_rank_fusion,
-        "rerank_with_crossencoder":rerank_with_crossencoder,
-        "build_corpus_from_bioasq":build_corpus_from_bioasq,
-        "save_bm25_index":         save_bm25_index,
-        "load_bm25_index":         load_bm25_index,
-        "save_dense_index":        save_dense_index,
-        "load_dense_index":        load_dense_index,
+        "build_bm25_index":         build_bm25_index,
+        "bm25_retrieve":            bm25_retrieve,
+        "build_dense_index":        build_dense_index,
+        "dense_retrieve":           dense_retrieve,
+        "reciprocal_rank_fusion":   reciprocal_rank_fusion,
+        "rerank_with_crossencoder": rerank_with_crossencoder,
+        "build_corpus_from_bioasq": build_corpus_from_bioasq,
+        "save_bm25_index":          save_bm25_index,
+        "load_bm25_index":          load_bm25_index,
+        "save_dense_index":         save_dense_index,
+        "load_dense_index":         load_dense_index,
     }
 
 
@@ -82,17 +92,14 @@ def _import_retrieval():
 # ===========================================================================
 
 GENERATOR_CONFIGS = {
-    "gpt4":       {"model_name": "gpt-4o",                                                    "backend": "openai"},
-    "gemini":     {"model_name": "gemini-2.0-flash",                                            "backend": "google"},
-    "medgemma":   {"model_name": "google/medgemma-4b-it",                                     "backend": "huggingface"},
-    "pubmedbert": {"model_name": "microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract",      "backend": "huggingface"},
+    "gpt4":       {"model_name": "gpt-4o",                                               "backend": "openai"},
+    "gemini":     {"model_name": "gemini-2.0-flash",                                     "backend": "google"},
+    "medgemma":   {"model_name": "google/medgemma-4b-it",                                "backend": "huggingface"},
+    "pubmedbert": {"model_name": "microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract", "backend": "huggingface"},
 }
 
-# Cross-encoder model for hybrid reranking (Joel's config)
-CROSSENCODER_MODEL = "cross-encoder/qnli-MiniLM2-L6"
-
-# Default index paths
-INDEX_DIR = Path("output/indices")
+CROSSENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+INDEX_DIR          = Path("output/indices")
 
 
 # ===========================================================================
@@ -117,17 +124,13 @@ class BioASQRAGSystem:
         self.generator_type = generator.lower()
         self.k              = k
 
-        # Retrieval state
-        self._corpus:      list[dict]  = []
-        self._bm25_index               = None
-        self._dense_embs               = None
-        self._dense_encoder            = None
-        self._retrieval                = None   # lazy-loaded retrieval module
+        self._corpus:         list[dict] = []
+        self._bm25_index                 = None
+        self._dense_embs                 = None
+        self._dense_encoder              = None
+        self._retrieval                  = None
 
-        # Generation state
-        self._llm: dict | None         = None
-
-        # Session registry: session_id → ConversationManager
+        self._llm: Optional[dict]                      = None
         self._sessions: dict[str, ConversationManager] = {}
 
         self._validate_args()
@@ -147,8 +150,8 @@ class BioASQRAGSystem:
 
     def load_generator(self) -> None:
         """Load the LLM specified by --generator."""
-        cfg        = GENERATOR_CONFIGS[self.generator_type]
-        self._llm  = load_llm(cfg["model_name"], cfg["backend"])
+        cfg       = GENERATOR_CONFIGS[self.generator_type]
+        self._llm = load_llm(cfg["model_name"], cfg["backend"])
 
     def index_corpus(self, questions: list[dict]) -> None:
         """
@@ -156,7 +159,9 @@ class BioASQRAGSystem:
         Skipped if retriever=none.
 
         Saves indices to output/indices/ for reuse across runs.
-        If indices already exist on disk, loads them instead of rebuilding.
+        If a cached index exists but its size does not match the current
+        corpus size, it is rebuilt — this handles --limit N runs correctly
+        and prevents IndexError in dense_retrieve() (FIX-5).
         """
         if self.retriever_type == "none":
             print("[INFO] Retriever=none — skipping corpus indexing.")
@@ -165,55 +170,80 @@ class BioASQRAGSystem:
         self._retrieval = _import_retrieval()
         INDEX_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Build corpus from BioASQ snippets
         print("[INFO] Building corpus from BioASQ snippets...")
         self._corpus = self._retrieval["build_corpus_from_bioasq"](questions)
+        print(f"[INFO] Corpus built: {len(self._corpus)} chunks from {len(questions)} questions.")
 
         bm25_path   = INDEX_DIR / "bm25_index.pkl"
         dense_path  = INDEX_DIR / "dense_index.npy"
         corpus_path = INDEX_DIR / "corpus.json"
 
-        # Always save the current corpus alongside the indices so they stay in sync
-        INDEX_DIR.mkdir(parents=True, exist_ok=True)
+        # Persist corpus alongside indices so they stay in sync
         with open(corpus_path, "w") as f:
             import json as _json
             _json.dump(self._corpus, f)
         print(f"[INFO] Corpus saved to {corpus_path} ({len(self._corpus)} chunks)")
 
-        # BM25 — rebuild whenever corpus changes
+        # ------------------------------------------------------------------
+        # BM25
+        # ------------------------------------------------------------------
         if self.retriever_type in ("bm25", "hybrid"):
             if bm25_path.exists():
-                # Load saved corpus that matches this index
-                with open(corpus_path) as f:
-                    self._corpus = _json.load(f)
                 print(f"[INFO] Loading BM25 index from {bm25_path}")
                 self._bm25_index = self._retrieval["load_bm25_index"](str(bm25_path))
-                # Validate corpus/index are in sync
-                index_size = self._bm25_index.corpus_size if hasattr(self._bm25_index, "corpus_size") else len(self._corpus)
+                index_size = (
+                    self._bm25_index.corpus_size
+                    if hasattr(self._bm25_index, "corpus_size")
+                    else len(self._corpus)
+                )
                 if len(self._corpus) != index_size:
-                    print(f"[INFO] Index/corpus mismatch ({index_size} vs {len(self._corpus)}) — rebuilding BM25 index...")
+                    print(f"[INFO] BM25 index/corpus mismatch ({index_size} vs {len(self._corpus)}) — rebuilding...")
                     self._bm25_index = self._retrieval["build_bm25_index"](self._corpus)
                     self._retrieval["save_bm25_index"](self._bm25_index, str(bm25_path))
+                    print(f"[INFO] BM25 index saved to {bm25_path}")
             else:
                 print("[INFO] Building BM25 index...")
                 self._bm25_index = self._retrieval["build_bm25_index"](self._corpus)
                 self._retrieval["save_bm25_index"](self._bm25_index, str(bm25_path))
+                print(f"[INFO] BM25 index saved to {bm25_path}")
 
-        # Dense — rebuild whenever corpus changes
+        # ------------------------------------------------------------------
+        # Dense
+        # [FIX-5] Check cached index row count against current corpus size
+        # before loading. A stale full-dataset index (78762 rows) used with a
+        # 121-chunk --limit corpus causes dense_retrieve() to return out-of-
+        # range indices → IndexError: list index out of range.
+        # numpy mmap_mode="r" reads only the array header to get shape without
+        # loading the full matrix into memory.
+        # ------------------------------------------------------------------
         if self.retriever_type in ("dense", "hybrid"):
             if dense_path.exists():
-                with open(corpus_path) as f:
-                    self._corpus = _json.load(f)
-                print(f"[INFO] Loading dense index from {dense_path}")
-                self._dense_embs, self._dense_encoder = self._retrieval["load_dense_index"](
-                    str(dense_path), "BAAI/bge-m3"
-                )
+                import numpy as np
+                cached_size = np.load(str(dense_path), mmap_mode="r").shape[0]
+
+                if cached_size != len(self._corpus):
+                    print(
+                        f"[INFO] Dense index/corpus mismatch "
+                        f"({cached_size} vs {len(self._corpus)}) — rebuilding dense index..."
+                    )
+                    self._dense_embs, self._dense_encoder = self._retrieval["build_dense_index"](
+                        self._corpus
+                    )
+                    self._retrieval["save_dense_index"](self._dense_embs, str(dense_path))
+                    print(f"[INFO] Dense index saved to {dense_path}. Shape: {self._dense_embs.shape}")
+                else:
+                    print(f"[INFO] Loading dense index from {dense_path}")
+                    self._dense_embs, self._dense_encoder = self._retrieval["load_dense_index"](
+                        str(dense_path), "BAAI/bge-m3"
+                    )
+                    print(f"[INFO] Dense index loaded from {dense_path}. Shape: {self._dense_embs.shape}")
             else:
                 print("[INFO] Building dense index (this may take a few minutes)...")
                 self._dense_embs, self._dense_encoder = self._retrieval["build_dense_index"](
                     self._corpus
                 )
                 self._retrieval["save_dense_index"](self._dense_embs, str(dense_path))
+                print(f"[INFO] Dense index saved to {dense_path}. Shape: {self._dense_embs.shape}")
 
     # -----------------------------------------------------------------------
     # Retrieval
@@ -263,11 +293,11 @@ class BioASQRAGSystem:
                gold_answer: str = None) -> dict:
         """
         Full single-question pipeline:
-          1. Resolve anaphora + build contextualized query (ConversationManager)
-          2. Retrieve documents (or use BioASQ snippets if retriever=none)
-          3. Route to correct prompt template + generate answer
-          4. Grounding check
-          5. Update conversation history
+        1. Resolve anaphora + build contextualized query (ConversationManager)
+        2. Retrieve documents (or use BioASQ snippets if retriever=none)
+        3. Route to correct prompt template + generate answer
+        4. Grounding check (skipped for retriever=none)
+        5. Update conversation history
 
         Args:
             question:    Parsed BioASQ question dict.
@@ -277,21 +307,13 @@ class BioASQRAGSystem:
                          for evaluation (compute_context_retention_accuracy).
 
         Returns:
-            Prediction dict compatible with evaluation.py:
-            {
-                "question_id",  "question_type", "answer",
-                "retrieved_doc_ids", "retrieved_snippets",
-                "requires_context", "latency_s",
-                "grounded", "gold_answer" (if provided)
-            }
+            Prediction dict compatible with evaluation.py.
         """
         if self._llm is None:
             raise RuntimeError("Call load_generator() before answer().")
 
-        # Get or create conversation session
         manager = self._get_or_create_session(session_id)
-
-        body = question.get("body", "")
+        body    = question.get("body", "")
 
         # --- Clarification check ---
         if manager.is_query_underspecified(body):
@@ -311,19 +333,18 @@ class BioASQRAGSystem:
                 "grounded":           True,
             }
 
-        # --- Build contextualized query for retrieval ---
         contextualized_query = manager.build_contextualized_query(body)
 
-        # --- Retrieval ---
+        # --- Retrieval or snippet use ---
         start = time.perf_counter()
-
         if self.retriever_type == "none":
-            # Use BioASQ's own snippets directly — ablation / oracle mode
             snippets = get_snippets(question)
             retrieved_docs = [
-                {"doc_id": f"pubmed_{s.get('document','').split('/')[-1]}",
-                 "text":   s.get("text", ""),
-                 "pmid":   s.get("document","").split("/")[-1]}
+                {
+                    "doc_id": f"pubmed_{s.get('document','').split('/')[-1]}",
+                    "text":   s.get("text", ""),
+                    "pmid":   s.get("document","").split("/")[-1],
+                }
                 for s in snippets
             ][:self.k]
         else:
@@ -332,17 +353,16 @@ class BioASQRAGSystem:
         # --- Generation ---
         history = manager.get_context_window()
         result  = route_by_question_type(question, retrieved_docs, history, self._llm)
-
         latency = round(time.perf_counter() - start, 4)
 
         # --- Grounding check ---
-        answer_str = result["answer"]
-        if isinstance(answer_str, list):
-            answer_str = " ".join(answer_str)
-
-        grounding = check_answer_grounded(
-            answer_str, retrieved_docs, body, self._llm
-        )
+        if self.retriever_type == "none":
+            grounding = {"grounded": True, "flagged": False}
+        else:
+            answer_str = result["answer"]
+            if isinstance(answer_str, list):
+                answer_str = " ".join(answer_str)
+            grounding = check_answer_grounded(answer_str, retrieved_docs, body, self._llm)
 
         # --- Update conversation history ---
         manager.add_turn("user",      body,                retrieved_docs=retrieved_docs)
@@ -375,7 +395,6 @@ class BioASQRAGSystem:
                   session_id: str = None) -> list[dict]:
         """
         Run the full pipeline over a list of BioASQ questions.
-        Used by evaluation.py for automated benchmarking.
 
         Args:
             questions:  List of parsed BioASQ question dicts.
@@ -392,7 +411,6 @@ class BioASQRAGSystem:
         for i, q in enumerate(questions, 1):
             print(f"[INFO] Answering question {i}/{total} (id={q.get('id','')}, type={q.get('type','')})")
 
-            # Use exact_answer for structured types, ideal_answer for summary
             qtype = q.get("type", "summary")
             if qtype in ("factoid", "list", "yesno"):
                 gold = q.get("exact_answer")
@@ -403,7 +421,7 @@ class BioASQRAGSystem:
                 if isinstance(gold, list):
                     gold = gold[0] if gold else ""
 
-            sid  = session_id or str(uuid.uuid4())  # fresh session per question if no shared session
+            sid  = session_id or str(uuid.uuid4())
             pred = self.answer(q, session_id=sid, gold_answer=gold)
             predictions.append(pred)
 
@@ -414,25 +432,15 @@ class BioASQRAGSystem:
     # Interactive multi-turn chat
     # -----------------------------------------------------------------------
 
-    def chat(self,
-             user_message: str,
-             session_id: str) -> str:
+    def chat(self, user_message: str, session_id: str) -> str:
         """
-        Multi-turn chat interface — entry point for the Streamlit/Gradio UI.
+        Multi-turn chat interface — entry point for the Streamlit UI.
         Wraps answer() with a plain string return for easy UI integration.
-
-        Args:
-            user_message: The user's raw input string.
-            session_id:   Session ID to maintain conversation state.
-
-        Returns:
-            The assistant's answer as a plain string.
         """
-        # Build a minimal question dict from the raw message
         question = {
             "id":   f"chat_{session_id}_{int(time.time())}",
             "body": user_message,
-            "type": "summary",   # default — summary prompt handles open questions well
+            "type": "summary",
         }
         pred   = self.answer(question, session_id=session_id)
         answer = pred["answer"]
@@ -445,7 +453,7 @@ class BioASQRAGSystem:
     def _get_or_create_session(self, session_id: str = None) -> ConversationManager:
         """Return existing session or create a new one."""
         if session_id is None:
-            return ConversationManager()  # stateless — not stored
+            return ConversationManager()
         if session_id not in self._sessions:
             self._sessions[session_id] = ConversationManager(session_id=session_id)
         return self._sessions[session_id]
@@ -455,7 +463,7 @@ class BioASQRAGSystem:
         if session_id in self._sessions:
             self._sessions[session_id].reset()
 
-    def get_session_state(self, session_id: str) -> dict | None:
+    def get_session_state(self, session_id: str) -> Optional[dict]:
         """Serialize session state — used for logging and debugging."""
         if session_id in self._sessions:
             return self._sessions[session_id].to_dict()
@@ -500,45 +508,19 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
-    parser.add_argument(
-        "--k",
-        type=int,
-        default=5,
-        help="Number of documents to retrieve per query (default: 5).",
-    )
-
-    parser.add_argument(
-        "--data",
-        type=str,
-        default=str(Path(__file__).resolve().parent.parent / "data" / "BioASQ-training14b" / "training14b.json"),
-        help="Path to BioASQ dataset JSON file.",
-    )
-
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        help="Limit number of questions to process (useful for testing).",
-    )
-
-    parser.add_argument(
-        "--eval",
-        action="store_true",
-        help="Run full evaluation after batch inference and save results.",
-    )
-
-    parser.add_argument(
-        "--chat",
-        action="store_true",
-        help="Launch an interactive multi-turn CLI chat session.",
-    )
-
-    parser.add_argument(
-        "--output_dir",
-        type=str,
-        default="output/",
-        help="Directory for predictions and evaluation results (default: output/).",
-    )
+    parser.add_argument("--k",          type=int,  default=5,
+                        help="Number of documents to retrieve per query (default: 5).")
+    parser.add_argument("--data",       type=str,
+                        default=str(Path(__file__).resolve().parent.parent / "data" / "BioASQ-training14b" / "training14b.json"),
+                        help="Path to BioASQ dataset JSON file.")
+    parser.add_argument("--limit",      type=int,  default=None,
+                        help="Limit number of questions to process (useful for testing).")
+    parser.add_argument("--eval",       action="store_true",
+                        help="Run full evaluation after batch inference and save results.")
+    parser.add_argument("--chat",       action="store_true",
+                        help="Launch an interactive multi-turn CLI chat session.")
+    parser.add_argument("--output_dir", type=str,  default="output/",
+                        help="Directory for predictions and evaluation results (default: output/).")
 
     return parser.parse_args()
 
@@ -604,17 +586,14 @@ def _run_interactive_chat(system: "BioASQRAGSystem") -> None:
 def main():
     args = parse_args()
 
-    # Initialize system
     system = BioASQRAGSystem(
         retriever=args.retriever,
         generator=args.generator,
         k=args.k,
     )
 
-    # Load generator
     system.load_generator()
 
-    # Interactive chat — no dataset needed
     if args.chat:
         if args.retriever != "none":
             print("[WARNING] Chat mode with retrieval requires a pre-built index.")
@@ -625,7 +604,6 @@ def main():
         _run_interactive_chat(system)
         return
 
-    # Load and parse dataset
     print(f"[INFO] Loading dataset from {args.data}")
     raw_questions = load_bioasq_dataset(args.data)
     questions     = [parse_question(q) for q in raw_questions]
@@ -634,18 +612,14 @@ def main():
         questions = questions[:args.limit]
         print(f"[INFO] Limited to {args.limit} questions.")
 
-    # Build retrieval index
     system.index_corpus(questions)
 
-    # Batch inference
     predictions = system.run_batch(questions)
 
-    # Save predictions
     _save_predictions(predictions, args.output_dir, args.retriever, args.generator)
 
-    # Evaluation
     if args.eval:
-        ground_truth = questions  # parse_question() output is compatible with evaluation.py
+        ground_truth = questions
         run_full_evaluation(
             predictions,
             ground_truth,

@@ -1,11 +1,145 @@
-# config/config.yaml
+# =============================================================================
+# BioASQ Conversational RAG System — Configuration
+# =============================================================================
+# All hardcoded values across the codebase are centralized here.
+# Load with:
+#   import yaml
+#   with open("config/config.yaml") as f:
+#       config = yaml.safe_load(f)
+
+
+# =============================================================================
+# Paths
+# =============================================================================
+
+paths:
+  data_dir:          "data/"
+  bioasq_dataset:    "data/BioASQ-training14b/training14b.json"
+  synthetic_dir:     "data/synthetic/"
+  corpus_dir:        "data/corpus/"
+  output_dir:        "output/"
+  prediction_dir:    "output/prediction/"
+  evaluation_dir:    "output/evaluation/"
+  index_dir:         "output/indices/"
+  bm25_index:        "output/indices/bm25_index.pkl"
+  dense_index:       "output/indices/dense_index.npy"
+  llama_results:     "data/corpus/llama_results.jsonl"
+  judge_input:       "data/corpus/judge_input.jsonl"
+  dialogues:         "data/synthetic/dialogues.json"
+
+
+# =============================================================================
+# Retrieval  (Joel)
+# =============================================================================
 
 retrieval:
-  top_k: 10
-  rrf_k: 60
-  batch_size: 32
-  bm25_index_path: "output/indices/bm25_index.pkl"
-  dense_index_path: "output/indices/dense_index.npy"
-  dense_model: "BAAI/bge-m3"
-  crossencoder_model: "cross-encoder/qnli-MiniLM2-L6"
-  rerank_top_k: 5
+  default_mode:       "hybrid"          # none | bm25 | dense | hybrid
+  top_k:              5                 # documents returned per query
+  bm25_candidate_k:   10                # BM25 candidates before RRF (= top_k * 2)
+  dense_candidate_k:  10                # Dense candidates before RRF (= top_k * 2)
+  rrf_k:              60                # RRF smoothing constant
+  batch_size:         32                # encoding batch size for dense index
+  dense_model:        "BAAI/bge-m3"     # HuggingFace embedding model
+  crossencoder_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+
+# =============================================================================
+# Generation  (Oswaldo)
+# =============================================================================
+
+generation:
+  default_generator:  "gpt4"
+  max_tokens:         1024               # max tokens for clinical answers
+  temperature:        0.1               # low = more deterministic/factual
+  retries:            3                 # transient API error retries
+
+  # Per-task overrides
+  judge_max_tokens:   256
+  judge_temperature:  0.0               # deterministic for evaluation
+  clarification_max_tokens: 80
+  clarification_temperature: 0.3
+  summary_max_tokens: 150               # for history compression in ConversationManager
+  synthetic_temperature: 0.7            # higher variation for synthetic data generation
+
+  # Grounding check
+  grounding_score_threshold: 3          # factuality_score < this → flagged
+
+  # Generator backends
+  generators:
+    gpt4:
+      model_name: "gpt-4o"
+      backend:    "openai"
+    gemini:
+      model_name: "gemini-2.0-flash"
+      backend:    "google"
+    medgemma:
+      model_name: "google/medgemma-4b-it"
+      backend:    "huggingface"
+    pubmedbert:
+      model_name: "microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract"
+      backend:    "huggingface"
+
+
+# =============================================================================
+# Conversation Manager  (Oswaldo)
+# =============================================================================
+
+conversation:
+  window_size:        5                 # turns retained in context window
+  memory_strategy:    "sliding_window"  # sliding_window | summary
+
+
+# =============================================================================
+# Data  (Lowami)
+# =============================================================================
+
+data:
+  val_ratio:          0.1               # fraction held out for validation
+  shuffle:            true              # shuffle before train/val split
+  seed:               42                # random seed for reproducibility
+
+
+# =============================================================================
+# Synthetic Data Generation  (Lowami)
+# =============================================================================
+
+synthetic:
+  num_turns:          3                 # turns per generated dialogue
+  max_dialogues:      100               # target size of Biomedical Dialogue Set
+  bucket_name:        "bioasq-bucket"   # GCS bucket for Llama batch outputs
+  gcs_base_prefix:    "output/"
+  llama_model:        "llama-4-maverick-17b-128e-instruct-maas"
+  judge_model:        "gemini-2.0-flash"
+
+
+# =============================================================================
+# Evaluation  (Lowami)
+# =============================================================================
+
+evaluation:
+  # BioASQ Task 13b test sets — 4 batches of 85 questions = 340 total
+  test_batch_size:    85
+  n_test_batches:     4
+
+  # Proposal target performance tiers (Table 1)
+  targets:
+    document_map:
+      baseline:   0.30
+      target:     0.40
+      stretch:    0.42
+    snippet_fmeasure:
+      baseline:   0.08
+      target:     0.12
+      stretch:    0.15
+    yesno_f1:
+      baseline:   0.75
+      target:     0.90
+      stretch:    0.93
+    factoid_mrr:
+      baseline:   0.35
+      target:     0.50
+      stretch:    0.55
+    list_f1:
+      baseline:   0.30
+      target:     0.45
+      stretch:    0.50

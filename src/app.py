@@ -310,6 +310,52 @@ def _load_system(retriever: str, generator: str, k: int, data_path: str):
 
 
 # ===========================================================================
+# Question type detector
+# Routes UI queries to the correct prompt template.
+# Without this, every question goes through build_summary_prompt which
+# is the most demanding — yes/no and factoid questions almost always
+# return "Insufficient evidence" when forced through a summary prompt.
+# ===========================================================================
+def _detect_question_type(text: str) -> str:
+    """
+    Heuristic question type classifier for UI queries.
+    Routes to the correct BioASQ prompt template so the model receives
+    appropriately structured instructions.
+    """
+    lower = text.lower().strip()
+
+    # Yes/No — question starts with a verb that implies binary answer
+    yesno_starters = [
+        "is ", "are ", "does ", "do ", "was ", "were ",
+        "can ", "has ", "have ", "did ", "will ", "would ",
+        "could ", "should ",
+    ]
+    if any(lower.startswith(w) for w in yesno_starters):
+        return "yesno"
+
+    # List — explicit enumeration request
+    list_indicators = [
+        "list ", "what are ", "which are ", "name the ", "enumerate ",
+        "what types of", "what kind of", "what classes of",
+    ]
+    if any(w in lower for w in list_indicators):
+        return "list"
+
+    # Factoid — short exact answer expected
+    factoid_indicators = [
+        "what is the name", "what gene", "what protein", "what drug",
+        "what mutation", "what enzyme", "what receptor", "what chromosome",
+        "who discovered", "when was", "how many ", "what is the mechanism",
+        "what is the role", "what causes ",
+    ]
+    if any(w in lower for w in factoid_indicators):
+        return "factoid"
+
+    # Default to summary for open-ended questions
+    return "summary"
+
+
+# ===========================================================================
 # Sidebar
 # ===========================================================================
 with st.sidebar:
@@ -460,7 +506,7 @@ with chat_col:
                     question = {
                         "id":   f"ui_{st.session_state.session_id}_{int(time.time())}",
                         "body": user_input.strip(),
-                        "type": "summary",
+                        "type": _detect_question_type(user_input.strip()),
                     }
                     pred = system.answer(
                         question,

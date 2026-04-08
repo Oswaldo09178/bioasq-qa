@@ -1,14 +1,21 @@
 # Prompt Templates (Oswaldo)
 # One template per BioASQ question type + clarification + synthetic generation.
-# All prompts enforce strict grounding — the LLM must only use retrieved snippets.
+# All prompts enforce grounded generation — the LLM should primarily use
+# retrieved snippets, but is allowed to answer from partial evidence.
 #
 # Template inputs follow a consistent signature:
 #   question:  str               — the user's query (anaphora already resolved)
 #   snippets:  list[dict]        — retrieved docs: [{"text", "pmid", ...}]
 #   history:   list[dict]        — context window: [{"role", "content"}]
 #
-# The STRICT GROUNDING instruction appears in every clinical prompt.
-# This is the primary mitigation for hallucination risk (R1 in the proposal).
+# Fix history:
+#   [FIX-PROMPT-1] Relaxed GROUNDING_INSTRUCTION — the original instruction
+#   told the model to return "Insufficient evidence" if snippets did not
+#   contain "enough" information. This was interpreted too conservatively:
+#   even partially relevant snippets triggered the fallback, making the system
+#   refuse to answer dataset-native questions. The new instruction asks the
+#   model to attempt an answer from partial evidence, only refusing when
+#   snippets are completely unrelated to the question.
 
 
 # ===========================================================================
@@ -44,12 +51,17 @@ def _format_history(history: list[dict]) -> str:
     return "\n".join(lines)
 
 
+# [FIX-PROMPT-1] Relaxed grounding instruction.
+# Old: refused to answer if snippets lacked "enough" information.
+# New: attempts an answer from partial evidence; only refuses when snippets
+#      are completely unrelated to the question.
 GROUNDING_INSTRUCTION = (
     "IMPORTANT: Base your answer primarily on the evidence snippets provided above. "
-    "If the snippets are partially relevant, use them to construct the best possible answer — "
-    "do not refuse to answer just because the evidence is incomplete. "
+    "If the snippets are partially relevant, use them to construct the best possible "
+    "answer — do not refuse just because the evidence is incomplete or indirect. "
     "Only state 'Insufficient evidence in retrieved documents.' if the snippets are "
-    "completely unrelated to the question and you cannot derive any useful answer from them."
+    "completely unrelated to the question and you cannot derive any useful answer "
+    "from them whatsoever."
 )
 
 
@@ -278,4 +290,48 @@ Scoring guide for factuality_score:
   3 = Partially accurate, some unsupported claims
   2 = Mostly inaccurate or misleading
   1 = Contradicts the evidence or fabricated
+"""
+
+
+# ===========================================================================
+# Synthetic Multi-turn Data Generation
+# ===========================================================================
+
+def build_synthetic_multiturn_prompt(question: dict,
+                                      num_turns: int = 3) -> str:
+    """
+    Prompt for generating synthetic multi-turn dialogues from BioASQ questions.
+    Used by synthetic_data_utils.py (Lowami's pipeline).
+
+    Generates CoQA-style follow-up questions with anaphoric references
+    to simulate natural clinical inquiry patterns.
+    """
+    body         = question.get("body", "")
+    ideal_answer = question.get("ideal_answer", "")
+    if isinstance(ideal_answer, list):
+        ideal_answer = ideal_answer[0] if ideal_answer else ""
+
+    return f"""You are generating a synthetic multi-turn medical dialogue for research purposes.
+
+Original BioASQ question: {body}
+Known answer: {ideal_answer}
+
+Generate a realistic {num_turns}-turn clinical dialogue where:
+- Turn 1: A medical professional asks the original question
+- Turns 2+: Natural follow-up questions using anaphoric references
+  (e.g. "What about its side effects?", "Is that gene also involved in X?")
+
+For each turn provide:
+- query: the follow-up question
+- answer: a concise answer based on general medical knowledge
+- requires_context: true if the question uses anaphora requiring previous turns
+
+Respond ONLY with valid JSON:
+{{
+  "turns": [
+    {{"turn_id": 1, "query": "...", "answer": "...", "requires_context": false}},
+    {{"turn_id": 2, "query": "...", "answer": "...", "requires_context": true}},
+    {{"turn_id": 3, "query": "...", "answer": "...", "requires_context": true}}
+  ]
+}}
 """

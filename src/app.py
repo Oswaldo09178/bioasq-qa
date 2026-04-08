@@ -207,12 +207,17 @@ init_session()
 
 
 # ===========================================================================
-# Research mode flag
+# Environment detection
 # ===========================================================================
 RESEARCH_MODE = "--research" in sys.argv
 
-# Default config — best-performing values from experiments
-DEFAULT_RETRIEVER = "hybrid"
+# Streamlit Cloud has ~1GB RAM. Loading BGE-M3 (~500MB) + dense index (307MB)
+# together exceeds this limit and crashes the app. On Streamlit Cloud we use
+# BM25-only retrieval which needs no neural encoder — just the 13MB pickle.
+# On local/Babel: use hybrid (BM25 + dense + cross-encoder reranking).
+IS_STREAMLIT_CLOUD = Path("/mount/src").exists()
+
+DEFAULT_RETRIEVER = "bm25" if IS_STREAMLIT_CLOUD else "hybrid"
 DEFAULT_GENERATOR = "gemini"
 DEFAULT_K         = 5
 DEFAULT_DATA      = str(PROJECT_ROOT / "data" / "BioASQ-training14b" / "training14b.json")
@@ -291,9 +296,14 @@ def _load_system(retriever: str, generator: str, k: int, data_path: str):
         system._bm25_index = retrieval["load_bm25_index"](str(bm25_path))
 
     if retriever in ("dense", "hybrid"):
-        system._dense_embs, system._dense_encoder = retrieval["load_dense_index"](
-            str(dense_path), "BAAI/bge-m3"
-        )
+        # Skip dense index on Streamlit Cloud — BGE-M3 + 307MB index exceeds
+        # the 1GB RAM limit and crashes the app. BM25-only is used instead.
+        if IS_STREAMLIT_CLOUD:
+            st.warning("Running on Streamlit Cloud — using BM25 retrieval only (dense index requires too much RAM).")
+        else:
+            system._dense_embs, system._dense_encoder = retrieval["load_dense_index"](
+                str(dense_path), "BAAI/bge-m3"
+            )
 
     st.info(f"Corpus: {len(system._corpus):,} chunks loaded.")
     return system

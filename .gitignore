@@ -15,9 +15,9 @@ __pycache__/
 data/
 !data/synthetic/dialogues.json
 
-# Output — large generated artifacts not tracked
-output/
-!output/indices/
+# Output — ignore generated artifacts, keep pre-built indices
+output/evaluation/
+output/prediction/
 
 # Misc
 .hf_cache/

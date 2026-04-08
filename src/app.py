@@ -221,16 +221,43 @@ INDEX_DIR         = PROJECT_ROOT / "output" / "indices"
 
 # ===========================================================================
 # Fast index loader
-# [FIX-UI-1] When pre-built indices exist on disk, load them directly instead
-# of parsing the full 5,729-question dataset. Reduces startup from ~3 min
-# to ~10 seconds for the practitioner user study.
+# [FIX-UI-1] When pre-built indices exist on disk, load them directly.
+# [FIX-UI-4] If indices are missing (e.g. Streamlit Cloud first run),
+#             download them from HuggingFace Hub (Oswaldo12/bioasq-indices)
+#             before loading. This replaces the slow path that required the
+#             full 5,729-question dataset to be present locally.
+#             Download path: ~371MB, runs once, cached in output/indices/.
 # ===========================================================================
+HF_INDICES_REPO = "Oswaldo12/bioasq-indices"
+
+
+def _download_indices_from_hf():
+    """
+    Download pre-built indices from HuggingFace Hub into INDEX_DIR.
+    Only called when indices are missing locally (first run on Streamlit Cloud).
+    Uses snapshot_download which handles resumable downloads and caching.
+    """
+    try:
+        from huggingface_hub import snapshot_download
+        st.info("Downloading pre-built indices from HuggingFace Hub (~371MB)... This runs once.")
+        snapshot_download(
+            repo_id=HF_INDICES_REPO,
+            repo_type="dataset",
+            local_dir=str(INDEX_DIR),
+        )
+        st.success("Indices downloaded successfully.")
+    except Exception as e:
+        st.error(f"Failed to download indices from HuggingFace Hub: {e}")
+        raise
+
+
 def _load_system(retriever: str, generator: str, k: int, data_path: str):
     """
     Initialize BioASQRAGSystem and load indices.
 
-    Fast path  (indices exist): loads corpus.json + BM25/dense indices directly.
-    Slow path  (no indices):    parses full dataset and builds indices from scratch.
+    Path 1 — indices on disk : load directly (~10 seconds).
+    Path 2 — no indices      : download from HuggingFace Hub, then load.
+                               Runs once on Streamlit Cloud first deploy.
     """
     from rag_system import BioASQRAGSystem
 
@@ -238,45 +265,37 @@ def _load_system(retriever: str, generator: str, k: int, data_path: str):
     system.load_generator()
 
     if retriever == "none":
-        # No retrieval — nothing to index
         return system
 
+    INDEX_DIR.mkdir(parents=True, exist_ok=True)
     bm25_path   = INDEX_DIR / "bm25_index.pkl"
     dense_path  = INDEX_DIR / "dense_index.npy"
     corpus_path = INDEX_DIR / "corpus.json"
 
     indices_exist = bm25_path.exists() and dense_path.exists() and corpus_path.exists()
 
-    if indices_exist:
-        # --- Fast path ---
-        st.info("Loading pre-built indices...")
+    if not indices_exist:
+        # Download from HuggingFace Hub — runs once, cached after that
+        _download_indices_from_hf()
 
-        # Lazy-load retrieval module the same way rag_system.py does
-        from rag_system import _import_retrieval
-        retrieval = _import_retrieval()
-        system._retrieval = retrieval
+    # Load indices (always — whether just downloaded or already on disk)
+    st.info("Loading pre-built indices...")
+    from rag_system import _import_retrieval
+    retrieval = _import_retrieval()
+    system._retrieval = retrieval
 
-        with open(corpus_path) as f:
-            system._corpus = json.load(f)
+    with open(corpus_path) as f:
+        system._corpus = json.load(f)
 
-        if retriever in ("bm25", "hybrid"):
-            system._bm25_index = retrieval["load_bm25_index"](str(bm25_path))
+    if retriever in ("bm25", "hybrid"):
+        system._bm25_index = retrieval["load_bm25_index"](str(bm25_path))
 
-        if retriever in ("dense", "hybrid"):
-            system._dense_embs, system._dense_encoder = retrieval["load_dense_index"](
-                str(dense_path), "BAAI/bge-m3"
-            )
+    if retriever in ("dense", "hybrid"):
+        system._dense_embs, system._dense_encoder = retrieval["load_dense_index"](
+            str(dense_path), "BAAI/bge-m3"
+        )
 
-        st.info(f"Corpus: {len(system._corpus):,} chunks loaded.")
-
-    else:
-        # --- Slow path (first run, no pre-built indices) ---
-        st.warning("No pre-built indices found — building from scratch. This may take a few minutes.")
-        from data_utils import load_bioasq_dataset, parse_question
-        raw_qs    = load_bioasq_dataset(data_path)
-        questions = [parse_question(q) for q in raw_qs]
-        system.index_corpus(questions)
-
+    st.info(f"Corpus: {len(system._corpus):,} chunks loaded.")
     return system
 
 

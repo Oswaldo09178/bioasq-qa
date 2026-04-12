@@ -88,21 +88,25 @@ export HF_HOME=$PWD/.hf_cache
 # =============================================================================
 
 echo ""
-echo "[H3] Generator ablation — retriever=hybrid"
+echo "[H3] Retriever ablation — retriever=none"
 echo "-------------------------------"
 
-echo "[$(date)] Starting: hybrid + medgemma"
+echo "[$(date)] Starting: none + medgemma"
 python src/rag_system.py \
-    --retriever hybrid \
+    --retriever none \
     --generator medgemma \
     --k 5 \
     --data $DATA \
     --output_dir output/ \
     --eval
-echo "[$(date)] Done: hybrid + medgemma"
+echo "[$(date)] Done: none + medgemma"
 
 echo ""
 echo "=============================="
 echo "All experiments complete: $(date)"
 echo "Results in output/evaluation/"
 echo "=============================="
+
+echo ""
+echo "[H3] Generator ablation — retriever=hybrid"
+echo "-------------------------------"

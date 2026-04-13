@@ -94,7 +94,7 @@ def load_llm(model_name: str, backend: str = "huggingface") -> dict:
         # On CUDA machines (Babel L40S) "auto" correctly places everything on GPU.
         if torch.cuda.is_available():
             device_map = "auto"
-            torch_dtype = torch.float16
+            torch_dtype = torch.bfloat16
         else:
             # CPU-only: load entirely in RAM, no disk offload, no shape mismatch.
             # Slow for inference but correct — fine for local --limit 10 validation.
